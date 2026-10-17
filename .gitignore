@@ -1,3 +1,10 @@
+# File: .gitignore
+# History: Version 0.2, October 17, 2026
+# Program: Keep local data, environments, generated analysis, and build products out of Git.
+# Input: Git file paths relative to the repository.
+# Processing: Match transient outputs and local-only state against ignore rules.
+# Output: A source repository that contains code and documentation rather than generated datasets.
+
 # Python environments and generated files
 .venv/
 __pycache__/

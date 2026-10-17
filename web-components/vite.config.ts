@@ -1,3 +1,10 @@
+// File: web-components/vite.config.ts
+// History: Version 0.2, October 17, 2026
+// Program: Configure Vite dev and production builds for the component examples.
+// Input: Vite build invocation and the React demo source.
+// Processing: Set the React plugin and plain/React page entry points.
+// Output: Local demo server and built example bundles.
+
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { dirname, resolve } from 'node:path';

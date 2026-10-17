@@ -1,8 +1,10 @@
-"""FastAPI service for the local IncidentLens review dashboard.
-
-The analysis pipeline is the source of cluster and evidence data. Human review
-state is stored separately in a small SQLite file and never affects evaluation.
-"""
+# File: api/main.py
+# History: Version 0.2, October 17, 2026
+# Program: Serve the IncidentLens review UI and its analysis/review API.
+# Input: Generated incident and cluster files, optional PostgreSQL URL, and HTTP requests.
+# Processing: Load feature-only analysis results, add saved review state, and serve summaries, details, timelines, and proposal actions.
+# Output: Static dashboard files and JSON API responses; review actions persist in PostgreSQL or local SQLite.
+"""Serve the IncidentLens review UI and its analysis/review API."""
 from __future__ import annotations
 
 import csv
@@ -36,6 +38,7 @@ class ReviewUpdate(BaseModel):
 
 
 def read_csv(path: Path) -> list[dict[str, str]]:
+    """Read an existing UTF-8 CSV file or return an empty list when it is missing."""
     if not path.exists():
         return []
     with path.open(newline="", encoding="utf-8") as handle:
@@ -43,11 +46,13 @@ def read_csv(path: Path) -> list[dict[str, str]]:
 
 
 def data_ready() -> bool:
+    """Check that the dashboard input and baseline output files are available."""
     required = [DATA_DIR / "incidents.csv", DATA_DIR / "configuration_items.csv", ANALYSIS_DIR / "clusters.csv", ANALYSIS_DIR / "proposals.json"]
     return all(path.is_file() for path in required)
 
 
 def load_reviews() -> dict[str, dict[str, str]]:
+    """Load the latest proposal review state from PostgreSQL or local SQLite."""
     if DATABASE_URL:
         with psycopg.connect(DATABASE_URL) as connection:
             rows = connection.execute("""SELECT DISTINCT ON (p.cluster_id) p.cluster_id,p.status,COALESCE(r.note,''),COALESCE(r.updated_at,p.created_at)::text
@@ -63,6 +68,7 @@ def load_reviews() -> dict[str, dict[str, str]]:
 
 
 def persist_review(cluster_id: str, status: str, note: str = "") -> dict[str, str]:
+    """Save a reviewer status and note in the configured review-state database."""
     STATE_DB.parent.mkdir(parents=True, exist_ok=True)
     updated_at = datetime.now(timezone.utc).isoformat()
     if DATABASE_URL:
@@ -80,6 +86,7 @@ def persist_review(cluster_id: str, status: str, note: str = "") -> dict[str, st
 
 
 def build_clusters() -> list[dict[str, object]]:
+    """Combine analysis assignments, incident features, cause rankings, and saved review state."""
     if not data_ready():
         return []
     incidents = read_csv(DATA_DIR / "incidents.csv")
@@ -121,17 +128,20 @@ def build_clusters() -> list[dict[str, object]]:
 
 
 def cluster_counts(clusters: list[dict[str, object]]) -> dict[str, int]:
+    """Count clusters by their current human-review status."""
     counts = Counter(str(row["status"]) for row in clusters)
     return {"needs_review": counts["needs_review"], "proposed": counts["proposed"], "approved": counts["approved"], "dismissed": counts["dismissed"]}
 
 
 @app.get("/api/health")
 def health() -> dict[str, object]:
+    """Report service and dataset readiness for health checks."""
     return {"status": "ok", "data_ready": data_ready(), "data_dir": str(DATA_DIR), "analysis_dir": str(ANALYSIS_DIR)}
 
 
 @app.get("/api/dashboard")
 def dashboard() -> dict[str, object]:
+    """Return current incident, cluster, system, and review summary data."""
     if not data_ready():
         return {"ready": False, "message": "Run the synthetic generator and analysis pipeline to populate the dashboard."}
     clusters = build_clusters()
@@ -156,6 +166,7 @@ def dashboard() -> dict[str, object]:
 @app.get("/api/clusters")
 def list_clusters(q: str = "", status: str = "all", sort: Literal["desc", "asc"] = "desc",
                   offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200)) -> dict[str, object]:
+    """Search, filter, sort, and paginate candidate cluster summaries."""
     clusters = build_clusters()
     if q.strip():
         query = q.casefold()
@@ -170,6 +181,7 @@ def list_clusters(q: str = "", status: str = "all", sort: Literal["desc", "asc"]
 
 @app.get("/api/clusters/{cluster_id}")
 def cluster_detail(cluster_id: str) -> dict[str, object]:
+    """Return one cluster with its ranked causes, timeline, change marker, and incident sample."""
     row = next((item for item in build_clusters() if item["id"] == cluster_id), None)
     if row is None:
         raise HTTPException(404, "Cluster not found. Generate and analyze the synthetic dataset first.")
@@ -196,6 +208,7 @@ def cluster_detail(cluster_id: str) -> dict[str, object]:
 
 @app.post("/api/clusters/{cluster_id}/review")
 def review_cluster(cluster_id: str, update: ReviewUpdate) -> dict[str, object]:
+    """Validate and persist an authorized review status for an existing cluster."""
     exists = any(row["id"] == cluster_id for row in build_clusters())
     if not exists:
         raise HTTPException(404, "Cluster not found")
@@ -205,6 +218,7 @@ def review_cluster(cluster_id: str, update: ReviewUpdate) -> dict[str, object]:
 
 @app.get("/api/volume")
 def incident_volume() -> list[dict[str, object]]:
+    """Aggregate generated incidents into hourly volume counts."""
     if not data_ready():
         return []
     counts: Counter[str] = Counter()
@@ -216,6 +230,7 @@ def incident_volume() -> list[dict[str, object]]:
 
 @app.get("/")
 def index() -> FileResponse:
+    """Serve the IncidentLens dashboard HTML page."""
     return FileResponse(WEB_DIR / "index.html")
 
 

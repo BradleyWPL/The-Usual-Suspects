@@ -1,8 +1,10 @@
-"""Compare the Pandas baseline with Spark cleaning, hourly grouping, and change joins.
-
-Generate 2–5 million rows with --sizes 2000000,5000000. Output includes the
-runtime on this machine; Spark is expected to lose on smaller inputs.
-"""
+# File: spark/scale_benchmark.py
+# History: Version 0.2, October 17, 2026
+# Program: Compare pandas and PySpark processing on scaled synthetic feature data.
+# Input: Incident counts, seeded text/time features, and change records.
+# Processing: Normalize descriptions, group incidents by system/hour, join nearby changes, and compare sample outputs.
+# Output: Timing, equivalence checks, and benchmark metadata.
+"""Compare pandas and PySpark processing on scaled synthetic feature data."""
 from __future__ import annotations
 
 import argparse
@@ -17,6 +19,7 @@ sys.path.insert(0,str(ROOT/"pipelines"))
 from analyze import normalize
 
 def main()->None:
+    """Generate benchmark inputs and compare pandas and Spark operations and timings."""
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data",type=Path,default=ROOT/"data"/"generated")
     parser.add_argument("--output",type=Path,default=ROOT/"data"/"experiments"/"spark"/"comparison.json")

@@ -1,4 +1,10 @@
-"""Score clustering and candidate rankings against the separate synthetic answer key."""
+# File: data/evaluate.py
+# History: Version 0.2, October 17, 2026
+# Program: Measure clustering and ranked-cause quality against a separate synthetic answer key.
+# Input: Feature incidents, cluster/proposal outputs, and an optional evaluation label CSV.
+# Processing: Match labels to assignments, compute adjusted Rand index, cluster purity, noise share, and cause-ranking accuracy.
+# Output: A JSON evaluation summary with sample counts and a simulator-only warning.
+"""Measure clustering and ranked-cause quality against a separate synthetic answer key."""
 from __future__ import annotations
 
 import argparse
@@ -9,10 +15,12 @@ from math import comb
 from pathlib import Path
 
 def read_csv(path: Path) -> list[dict[str, str]]:
+    """Read a UTF-8 CSV file and return its rows as dictionaries."""
     with path.open(newline="", encoding="utf-8") as handle:
         return list(csv.DictReader(handle))
 
 def adjusted_rand(true_labels: list[str], predicted_labels: list[str]) -> float:
+    """Calculate adjusted Rand agreement between two label assignments."""
     n = len(true_labels)
     if n < 2:
         return 1.0
@@ -27,6 +35,7 @@ def adjusted_rand(true_labels: list[str], predicted_labels: list[str]) -> float:
     return 1.0 if maximum == expected else (sum_cells - expected) / (maximum - expected)
 
 def evaluate(data_dir: Path, analysis_dir: Path, truth_path: Path | None = None) -> dict[str, object]:
+    """Join predicted assignments with isolated labels and calculate clustering and ranking metrics."""
     total_incidents = len(read_csv(data_dir / "incidents.csv"))
     answer_key = truth_path or (data_dir / "true_causes.csv")
     truth = {row["incident_id"]: row["cause_id"] for row in read_csv(answer_key)}
@@ -72,6 +81,7 @@ def evaluate(data_dir: Path, analysis_dir: Path, truth_path: Path | None = None)
     }
 
 def main() -> None:
+    """Parse CLI paths, run evaluation, and print the resulting JSON metrics."""
     parser = argparse.ArgumentParser(description=__doc__)
     root = Path(__file__).resolve().parents[1]
     parser.add_argument("--data", type=Path, default=root / "data" / "generated")

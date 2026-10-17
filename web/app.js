@@ -1,11 +1,20 @@
+// File: web/app.js
+// History: Version 0.2, October 17, 2026
+// Program: Browser-side dashboard logic for IncidentLens.
+// Input: DOM selectors, dashboard endpoints, user actions, and synthetic demo fallback.
+// Processing: Render summaries, clusters, incident evidence, status changes, and CSV export.
+// Output: An interactive problem-review screen backed by API data.
+
 const DEMO_CLUSTERS = [
   {id:'CL-2048',title:'Authentication timeouts',count:142,first_seen:'2026-10-12T09:14:00Z',last_seen:'2026-10-12T15:14:00Z',volume:[2,3,3,4,5,8,13,22,31,39,33,28],change_marker_percent:53,change_summary:'Gateway certificate rotation',confidence:94,status:'needs_review',systems:['Auth Gateway','Identity API','Session Store'],causes:[{candidate_cause:'Authentication gateway certificate rotation',score_percent:94,evidence:['A related change preceded the first incident.']}]},
   {id:'CL-2046',title:'Payment queue delays',count:86,first_seen:'2026-10-12T08:42:00Z',last_seen:'2026-10-12T13:45:00Z',volume:[1,2,3,5,9,15,18,16,12,10,6,3],change_marker_percent:34,change_summary:'Broker partition rebalance',confidence:88,status:'needs_review',systems:['Payment API','Message Broker','Ledger'],causes:[{candidate_cause:'Payment broker partition rebalance',score_percent:88,evidence:['A broker change overlaps the incident onset.']}]},
   {id:'CL-2041',title:'Report generation failures',count:53,first_seen:'2026-10-12T07:26:00Z',last_seen:'2026-10-12T12:26:00Z',volume:[1,2,1,4,6,9,8,11,6,4,1,1],change_marker_percent:45,change_summary:'Warehouse index update',confidence:82,status:'proposed',systems:['Reporting Service','Warehouse'],causes:[{candidate_cause:'Warehouse query plan regression',score_percent:82,evidence:['A query index change preceded the reports.']}]},
 ];
 
+/** Find one dashboard element by its CSS selector. */
 const $ = (selector) => document.querySelector(selector);
 const rows = $('#cluster-rows');
+/** Escape API or user-provided text before it is inserted into the dashboard markup. */
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 let clusters = [];
 let selectedId = null;
@@ -13,13 +22,16 @@ let sortDescending = true;
 let apiAvailable = false;
 let dashboardSummary = {};
 
+/** Convert an API status value into the short label shown in the review UI. */
 function statusLabel(status) {
   return ({needs_review:'Needs review',proposed:'Proposed',approved:'Approved',dismissed:'Dismissed'})[status] || 'Needs review';
 }
+/** Format an ISO timestamp for the cluster detail panel. */
 function formatTime(value) {
   if (!value) return '—';
   return new Intl.DateTimeFormat(undefined,{hour:'2-digit',minute:'2-digit',timeZone:'UTC'}).format(new Date(value));
 }
+/** Draw the selected cluster volume and its nearest matching change marker. */
 function renderTimeline(item) {
   if (!Array.isArray(item.volume) || !item.volume.length) return;
   const max=Math.max(1,...item.volume); const step=440/Math.max(1,item.volume.length-1);
@@ -33,6 +45,7 @@ function renderTimeline(item) {
   if(item.change_marker_percent!==null && item.change_marker_percent!==undefined){marker.hidden=false;marker.style.left=`${item.change_marker_percent}%`;$('#change-label').textContent=(item.change_summary||'CHANGE APPLIED').slice(0,22).toUpperCase();}
   else marker.hidden=true;
 }
+/** Populate the four dashboard summary counts from the API response. */
 function renderSummary() {
   const number = (value) => Number(value || 0).toLocaleString();
   document.querySelectorAll('[data-summary]').forEach((node) => { node.textContent = number(dashboardSummary[node.dataset.summary]); });
@@ -41,6 +54,7 @@ function renderSummary() {
   const source = $('#source-state');
   if (source) source.textContent = apiAvailable ? 'PIPELINE CONNECTED · SIMULATED DATA' : 'SAMPLE PREVIEW · RUN THE API FOR PIPELINE DATA';
 }
+/** Filter, sort, and render current candidate clusters into the accessible table. */
 function renderRows() {
   const query = $('#search-input').value.trim().toLowerCase();
   const status = $('#status-filter').value;
@@ -64,6 +78,7 @@ function renderRows() {
     </tr>`;
   }).join('');
 }
+/** Render one cluster's timeline, systems, evidence ranking, and sample ticket. */
 function renderDetail(id) {
   const item = clusters.find((cluster) => cluster.id === id);
   if (!item) return;
@@ -84,10 +99,12 @@ function renderDetail(id) {
   if (sample) sample.textContent = incident ? `${incident.short_description} · ${incident.incident_id}` : 'Open cluster details to inspect the incident sample.';
   renderRows();
 }
+/** Show a short screen-reader-announced confirmation or error message. */
 function toast(message) {
   const node = $('#toast'); node.textContent = message; node.classList.add('show'); clearTimeout(toast.timer);
   toast.timer = setTimeout(() => node.classList.remove('show'), 2800);
 }
+/** Load live analysis data, then fall back to the labeled local example if unavailable. */
 async function loadDashboard() {
   try {
     const response = await fetch('/api/dashboard', {headers:{Accept:'application/json'}});
@@ -107,6 +124,7 @@ async function loadDashboard() {
   renderSummary(); renderRows(); if (selectedId) renderDetail(selectedId);
 }
 
+// This click handler fetches full incident evidence only when a user opens a row.
 rows.addEventListener('click', async (event) => {
   const row = event.target.closest('tr[data-id]'); if (!row) return;
   const id = row.dataset.id;
@@ -116,12 +134,15 @@ rows.addEventListener('click', async (event) => {
   }
   renderDetail(id);
 });
+// This keyboard handler makes table rows operable without a mouse.
 rows.addEventListener('keydown', (event) => {
   if ((event.key === 'Enter' || event.key === ' ') && event.target.matches('tr[data-id]')) { event.preventDefault(); event.target.click(); }
 });
 $('#search-input').addEventListener('input', renderRows);
 $('#status-filter').addEventListener('change', renderRows);
+// This handler toggles cluster-count sort order and announces the result.
 $('#sort-button').addEventListener('click', () => { sortDescending = !sortDescending; renderRows(); toast(`Sorted by incident count: ${sortDescending ? 'highest first' : 'lowest first'}`); });
+// This handler saves an explicit human proposal action to the configured review store.
 $('#propose-button').addEventListener('click', async () => {
   const item = clusters.find((cluster) => cluster.id === selectedId); if (!item || item.status !== 'needs_review') return;
   if (apiAvailable) {
@@ -132,16 +153,20 @@ $('#propose-button').addEventListener('click', async () => {
   }
   item.status = 'proposed'; renderDetail(selectedId); renderSummary(); toast(`Proposal saved for ${item.id}. Human review required.`);
 });
+// This handler refreshes analysis data without losing the current page context.
 $('#refresh-button').addEventListener('click', async (event) => {
   const button = event.currentTarget; button.disabled = true; button.querySelector('.button-icon').textContent = '…';
   if (apiAvailable) await loadDashboard();
   button.disabled = false; button.querySelector('.button-icon').textContent = '↻'; toast(apiAvailable ? 'Analysis results reloaded.' : 'Showing the sample preview. Start the API for pipeline results.');
 });
+// This handler downloads the currently loaded cluster summary as CSV.
 $('#export-button').addEventListener('click', () => {
   const csv = ['cluster_id,title,incident_count,first_seen,confidence,status', ...clusters.map((item) => [item.id,`"${item.title.replaceAll('"','""')}"`,item.count,item.first_seen,item.confidence,item.status].join(','))].join('\n');
   const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'})); link.download = 'incidentlens-clusters.csv'; link.click(); URL.revokeObjectURL(link.href); toast('Cluster view exported as CSV.');
 });
+// This handler clears search and status filters so every cluster is visible.
 $('#view-all').addEventListener('click', () => { $('#status-filter').value = 'all'; $('#search-input').value = ''; renderRows(); toast(`Showing ${clusters.length} available clusters.`); });
+// This global keyboard handler supports the search shortcut and Escape-to-clear behavior.
 document.addEventListener('keydown', (event) => {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); $('#search-input').focus(); }
   if (event.key === 'Escape') { $('#search-input').value = ''; renderRows(); $('#search-input').blur(); }

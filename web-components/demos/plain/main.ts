@@ -1,3 +1,10 @@
+// File: web-components/demos/plain/main.ts
+// History: Version 0.2, October 17, 2026
+// Program: Wire the custom elements into the plain HTML component demonstration.
+// Input: Form submission custom events from the review component.
+// Processing: Listen for the event and display a local confirmation message.
+// Output: A visible demo result without a backend write.
+
 import '../../src/index';
 import type { LensEvidenceList, LensIncidentTimeline, LensDependencyGraph, LensNoiseMeter } from '../../src/index';
 
@@ -8,4 +15,5 @@ timeline.points=[{hour:'00',count:2},{hour:'03',count:3},{hour:'06',count:7},{ho
 const graph=document.querySelector<LensDependencyGraph>('#dependencies')!;
 graph.nodes=[{id:'directory',label:'Directory'},{id:'identity',label:'Identity API'},{id:'gateway',label:'Auth Gateway'}];graph.edges=[{from:'directory',to:'identity'},{from:'identity',to:'gateway'}];
 const noise=document.querySelector<LensNoiseMeter>('#noise')!;noise.total=2481;noise.clustered=2010;
+// Show a local confirmation when the component emits its demonstration submit event.
 document.addEventListener('proposal-submit',(event)=>{const detail=(event as CustomEvent).detail;document.querySelector('#result')!.textContent=`Proposal saved locally for ${detail.clusterId}. Human review is still required.`;});

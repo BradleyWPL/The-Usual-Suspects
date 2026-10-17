@@ -1,9 +1,10 @@
-"""Load generated incidents and analysis into PostgreSQL.
-
-Set DATABASE_URL (for example postgresql://incidentlens:incidentlens@localhost:5432/incidentlens)
-and run this after generate.py and pipelines/analyze.py. Evaluation labels are
-loaded into their isolated table and never joined into model feature queries.
-"""
+# File: data/load_postgres.py
+# History: Version 0.2, October 17, 2026
+# Program: Load generated incidents and analysis results into PostgreSQL.
+# Input: DATABASE_URL, generated feature CSVs, analysis outputs, and data/schema.sql.
+# Processing: Create the schema and insert current feature, clustering, and proposal records in a transaction.
+# Output: A populated local or configured PostgreSQL database; labels remain in the isolated evaluation table.
+"""Load generated incidents and analysis results into PostgreSQL."""
 from __future__ import annotations
 
 import argparse
@@ -18,11 +19,13 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def rows(path: Path) -> list[dict[str, str]]:
+    """Read a UTF-8 CSV file into row dictionaries."""
     with path.open(newline="", encoding="utf-8") as handle:
         return list(csv.DictReader(handle))
 
 
 def load(database_url: str, data_dir: Path, analysis_dir: Path, schema_path: Path) -> dict[str, int]:
+    """Apply the schema and transactionally load synthetic features and analysis outputs."""
     with psycopg.connect(database_url) as connection:
         connection.execute(schema_path.read_text(encoding="utf-8"))
         # The generator can evolve between commits. Replace the current demo
@@ -69,6 +72,7 @@ def load(database_url: str, data_dir: Path, analysis_dir: Path, schema_path: Pat
 
 
 def main() -> None:
+    """Read DATABASE_URL and input paths, invoke the loader, and report inserted counts."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data", type=Path, default=ROOT / "data" / "generated")
     parser.add_argument("--analysis", type=Path, default=ROOT / "data" / "analysis")

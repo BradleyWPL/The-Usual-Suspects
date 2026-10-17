@@ -1,8 +1,10 @@
-"""Train a TensorFlow sequence autoencoder on normal hourly service counts.
-
-The cause answer key is used only to exclude abnormal windows from training
-and score the final time-ordered holdout. Model inputs contain hourly counts.
-"""
+# File: models/train_spike_detector.py
+# History: Version 0.2, October 17, 2026
+# Program: Train and score an LSTM autoencoder for unusual hourly ticket volume.
+# Input: Hourly counts derived from incident timestamps and separate labels used for training masks and evaluation.
+# Processing: Learn normal-volume windows from training time, score later windows, and compute spike detection metrics.
+# Output: Model and experiment metrics with synthetic-data limitations.
+"""Train and score an LSTM autoencoder for unusual hourly ticket volume."""
 from __future__ import annotations
 
 import argparse
@@ -16,16 +18,19 @@ ROOT=Path(__file__).resolve().parents[1]
 WINDOW=24
 
 def read(path:Path)->list[dict[str,str]]:
+    """Read a UTF-8 CSV file into dictionaries."""
     with path.open(newline="",encoding="utf-8") as f:return list(csv.DictReader(f))
 
 def hour(value:str)->datetime:
+    """Parse a timestamp and round it down to the start of its hour."""
     parsed=datetime.fromisoformat(value.replace("Z","+00:00"))
     return parsed.replace(minute=0,second=0,microsecond=0)
 
 def main()->None:
+    """Build hourly volume windows, train the autoencoder, and report held-out spike metrics."""
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data",type=Path,default=ROOT/"data"/"generated")
-    parser.add_argument("--analysis",type=Path,default=ROOT/"data"/"analysis"/"holdout")
+    parser.add_argument("--analysis",type=Path,default=ROOT/"data"/"analysis"/"test")
     parser.add_argument("--output",type=Path,default=ROOT/"data"/"experiments"/"spikes")
     parser.add_argument("--epochs",type=int,default=12)
     parser.add_argument("--threshold-quantile",type=float,default=.99)

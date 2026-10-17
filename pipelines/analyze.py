@@ -1,4 +1,10 @@
-"""Normalize incidents, form a TF-IDF similarity baseline, and rank evidence."""
+# File: pipelines/analyze.py
+# History: Version 0.2, October 17, 2026
+# Program: Cluster similar incident descriptions and rank candidate root causes.
+# Input: Feature-only incident, system, dependency, change, and cause-catalog CSV files.
+# Processing: Normalize language, create sparse TF-IDF vectors, connect same-system similar records, and score change/dependency evidence.
+# Output: Cluster assignments, candidate cause proposals, and a run manifest without reading evaluation labels.
+"""Cluster similar incident descriptions and rank candidate root causes."""
 from __future__ import annotations
 
 import argparse
@@ -20,6 +26,7 @@ DATE_TIME_RE = re.compile(r"\b\d{1,4}[-/:]\d{1,2}(?:[-/:]\d{1,4})?(?:[ T]\d{1,2}
 TOKEN_RE = re.compile(r"[a-z][a-z0-9]{1,}")
 
 def normalize(text: str) -> str:
+    """Lowercase and normalize ticket text while removing identifiers and template noise."""
     text = HOST_RE.sub(" ", text.lower())
     text = TICKET_RE.sub(" ", text)
     text = IP_RE.sub(" ", text)
@@ -29,14 +36,17 @@ def normalize(text: str) -> str:
     return " ".join(tokens)
 
 def read_csv(path: Path) -> list[dict[str, str]]:
+    """Read a UTF-8 CSV file into dictionaries."""
     with path.open(newline="", encoding="utf-8") as handle:
         return list(csv.DictReader(handle))
 
 def parse_time(value: str) -> datetime:
+    """Parse an ISO timestamp into a timezone-aware datetime."""
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 def vectorize(documents: list[str]) -> list[dict[str, float]]:
+    """Create sparse TF-IDF word and phrase vectors for normalized descriptions."""
     features = []
     for document in documents:
         words = document.split()
@@ -63,11 +73,13 @@ def cluster(vectors: list[dict[str, float]], system_ids: list[str], threshold: f
     parent = list(range(len(vectors)))
     size = [1] * len(vectors)
     def find(node: int) -> int:
+        """Find the representative node for one component in the disjoint-set structure."""
         while parent[node] != node:
             parent[node] = parent[parent[node]]
             node = parent[node]
         return node
     def union(left: int, right: int) -> None:
+        """Join two component representatives in the disjoint-set structure."""
         a, b = find(left), find(right)
         if a == b:
             return
@@ -101,6 +113,7 @@ def cluster(vectors: list[dict[str, float]], system_ids: list[str], threshold: f
 def rank_causes(members: list[dict[str, str]], all_incidents: list[dict[str, str]], changes: list[dict[str, str]],
                 systems: list[dict[str, str]], edges: list[dict[str, str]], catalog: list[dict[str, str]],
                 threshold_hours: float = 24.0) -> list[dict[str, object]]:
+    """Rank catalog causes using recent changes and upstream-dependency evidence."""
     onset = min(parse_time(item["opened_at"]) for item in members)
     impacted = {item["ci_id"] for item in members}
     names = {row["ci_id"]: row["name"] for row in systems}
@@ -140,6 +153,7 @@ def rank_causes(members: list[dict[str, str]], all_incidents: list[dict[str, str
     return ranked
 
 def analyze(data_dir: Path, output: Path, threshold: float = 0.28, min_size: int = 4) -> dict[str, object]:
+    """Run feature-only normalization, clustering, evidence ranking, and output writing."""
     started = datetime.now(timezone.utc)
     incidents = read_csv(data_dir / "incidents.csv")
     changes = read_csv(data_dir / "changes.csv")
@@ -177,6 +191,7 @@ def analyze(data_dir: Path, output: Path, threshold: float = 0.28, min_size: int
     return {**result, "results_dir": str(output)}
 
 def main() -> None:
+    """Parse the analysis settings and execute the baseline pipeline."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data", type=Path, default=Path(__file__).resolve().parents[1] / "data" / "generated")
     parser.add_argument("--output", type=Path, default=Path(__file__).resolve().parents[1] / "data" / "analysis")

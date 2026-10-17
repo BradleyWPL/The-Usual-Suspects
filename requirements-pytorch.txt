@@ -1,3 +1,10 @@
+# File: requirements-pytorch.txt
+# History: Version 0.2, October 17, 2026
+# Program: Declare dependencies for the optional contrastive text-encoder experiment.
+# Input: A separate Python 3.12 virtual environment.
+# Processing: Install embedding requirements, datasets, PyTorch-backed training, and MLflow.
+# Output: An isolated model-training environment.
+
 -r requirements-embedding.txt
 datasets>=4,<5
 mlflow>=3,<4

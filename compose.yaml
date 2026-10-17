@@ -1,3 +1,10 @@
+# File: compose.yaml
+# History: Version 0.2, October 17, 2026
+# Program: Define the local app and PostgreSQL development services.
+# Input: Docker image definitions, local environment settings, ports, and volumes.
+# Processing: Start a healthy database before the app generates and loads demo data.
+# Output: A local containerized demo stack.
+
 services:
   db:
     image: postgres:18-alpine

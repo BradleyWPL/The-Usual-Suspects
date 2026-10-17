@@ -1,4 +1,11 @@
 #!/usr/bin/env sh
+# File: ops/run-nightly.sh
+# History: Version 0.2, October 17, 2026
+# Program: Run the reproducible IncidentLens pipeline as a scheduled Unix job.
+# Input: Configured Python interpreter, working directory, and optional DATABASE_URL.
+# Processing: Generate benchmark inputs, run analysis/evaluation, and optionally load PostgreSQL.
+# Output: Timestamped logs and refreshed generated outputs.
+
 set -eu
 
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"

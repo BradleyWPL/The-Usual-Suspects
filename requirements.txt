@@ -1,3 +1,10 @@
+# File: requirements.txt
+# History: Version 0.2, October 17, 2026
+# Program: Declare version ranges for the core FastAPI review application.
+# Input: Python package installer and supported Python runtime.
+# Processing: Resolve the web server, API framework, and PostgreSQL client dependencies.
+# Output: An installable core Python environment.
+
 fastapi>=0.115,<1
 uvicorn[standard]>=0.30,<1
 psycopg[binary]>=3.2,<4

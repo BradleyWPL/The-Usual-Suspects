@@ -1,3 +1,10 @@
+# File: ops/incidentlens.cron.example
+# History: Version 0.2, October 17, 2026
+# Program: Provide an example cron schedule for the nightly synthetic analysis job.
+# Input: The user crontab environment and repository path.
+# Processing: Launch ops/run-nightly.sh on the example schedule.
+# Output: A copyable cron entry; it does not install or activate itself.
+
 # Install with crontab -e after setting DATABASE_URL in the service account environment.
 # Runs the deterministic synthetic demo refresh nightly at 02:15 UTC.
 15 2 * * * /path/to/The-Usual-Suspects/ops/run-nightly.sh

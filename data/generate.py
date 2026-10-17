@@ -1,4 +1,10 @@
-"""Generate a deterministic, fictional IT service-desk dataset."""
+# File: data/generate.py
+# History: Version 0.2, October 17, 2026
+# Program: Generate repeatable fictional service-desk incidents and supporting inventory data.
+# Input: Seed, profile size, output directory, and optional incident/noise counts.
+# Processing: Sample recurring causes, realistic timestamp distributions, changes, dependencies, one-off requests, and controlled language noise.
+# Output: Feature CSV files plus a separate true_causes.csv evaluation answer key.
+"""Generate repeatable fictional service-desk incidents and supporting inventory data."""
 from __future__ import annotations
 
 import argparse
@@ -81,6 +87,7 @@ def support_timestamp(start: datetime, rng: random.Random, days: int = 30) -> da
     return start + timedelta(days=day, hours=hour, minutes=rng.randrange(60), seconds=rng.randrange(60))
 
 def add_text_noise(text: str, rng: random.Random) -> str:
+    """Apply seeded abbreviation, typo, alert-prefix, and formatting noise to a ticket description."""
     if rng.random() < 0.035:
         text = text.replace("service", "svc", 1).replace("connection", "conn", 1)
     if rng.random() < 0.025:
@@ -98,6 +105,7 @@ def add_text_noise(text: str, rng: random.Random) -> str:
     return text
 
 def write_csv(path: Path, fields: list[str], rows: list[dict[str, object]]) -> None:
+    """Write row dictionaries to a CSV file with a supplied, stable column order."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
@@ -105,6 +113,7 @@ def write_csv(path: Path, fields: list[str], rows: list[dict[str, object]]) -> N
         writer.writerows(rows)
 
 def generate(output: Path, incidents_per_cause: int = 180, noise_count: int = 450) -> dict[str, int]:
+    """Create recurring-cause tickets, one-off requests, system inventory, dependency edges, and changes."""
     rng = random.Random(SEED)
     start = datetime(2026, 9, 16, tzinfo=timezone.utc)
     system_id = {name: ci for ci, name, _, _ in SYSTEMS}
@@ -112,6 +121,7 @@ def generate(output: Path, incidents_per_cause: int = 180, noise_count: int = 45
 
     def new_incident_id() -> str:
         # Random IDs avoid encoding cause, generation order, or noise membership.
+        """Create a seeded, unique-looking incident identifier."""
         while True:
             value = f"INC-{rng.randrange(1_000_000_000):09d}"
             if value not in used_incident_ids:
@@ -205,6 +215,7 @@ def generate(output: Path, incidents_per_cause: int = 180, noise_count: int = 45
             "causes": len(CAUSES), "changes": len(change_rows)}
 
 def main() -> None:
+    """Parse the profile and size options, generate the selected dataset, and print row counts."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=Path(__file__).parent / "generated")
     parser.add_argument("--profile", choices=["quick", "benchmark"], default="quick",

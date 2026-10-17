@@ -1,1 +1,9 @@
+/*
+File: web-components/demos/plain/demo.css
+History: Version 0.2, October 17, 2026
+Program: Style the plain HTML Lit component demonstration.
+Input: Demo element classes and viewport size.
+Processing: Apply a simple responsive layout and component-level presentation.
+Output: A readable standalone component demo.
+*/
 *{box-sizing:border-box}body{margin:0;background:#f3f7f5;color:#1c302b;font:15px/1.55 system-ui,sans-serif}main{max-width:1080px;margin:0 auto;padding:48px 24px}.eyebrow{font:600 11px ui-monospace,monospace;letter-spacing:1.4px;color:#258a75}h1{margin:8px 0;font-size:36px;letter-spacing:-1px}.intro{color:#697a74;margin:0 0 28px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}#result{color:#236c5d;font-weight:600}@media(max-width:700px){.grid{grid-template-columns:1fr}main{padding:28px 16px}}

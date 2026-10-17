@@ -1,3 +1,10 @@
+-- File: data/schema.sql
+-- History: Version 0.2, October 17, 2026
+-- Program: Define PostgreSQL storage and reporting views for synthetic incident analysis.
+-- Input: Incident, system, dependency, change, run, proposal, and review rows.
+-- Processing: Create relational tables, constraints, indexes, and analysis views.
+-- Output: A schema consumed by the local PostgreSQL loader and Compose stack.
+
 -- IncidentLens development schema. Synthetic answer-key data stays isolated.
 CREATE TABLE IF NOT EXISTS configuration_items (
     ci_id TEXT PRIMARY KEY,

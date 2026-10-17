@@ -1,3 +1,10 @@
+# File: requirements.lock.txt
+# History: Version 0.2, October 17, 2026
+# Program: Pin exact resolved Python packages for reproducible core app installation.
+# Input: The package resolver reads this file during run.ps1 setup and Docker builds.
+# Processing: Install fixed versions of the core API runtime and transitive dependencies.
+# Output: A repeatable dependency set for the core application.
+
 annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.15.1

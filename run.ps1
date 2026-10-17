@@ -1,3 +1,11 @@
+# File: run.ps1
+# History: Version 0.2, October 17, 2026
+# Program: Set up IncidentLens, regenerate its quick synthetic dataset, and/or start the review API.
+# Input: Optional Mode (web, pipeline, or all) and Install switch from PowerShell.
+# Processing: Create the local Python environment, install locked dependencies when asked,
+#             generate data, run baseline and split evaluations, and launch Uvicorn.
+# Output: Local generated analysis files and, for web/all modes, the app at 127.0.0.1:8000.
+
 param(
     [ValidateSet("web", "pipeline", "all")]
     [string]$Mode = "all",
@@ -18,10 +26,12 @@ if ($Mode -in @("pipeline", "all")) {
     & $Python data\generate.py --profile quick
     & $Python pipelines\analyze.py
     & $Python data\evaluate.py
-    & $Python data\realism_report.py --output data\analysis\realism_report.json | Out-Null
+    & $Python data\realism_report.py --sample-size 250 --output data\analysis\realism_report.json --worksheet data\analysis\realism_review_worksheet.csv | Out-Null
     & $Python data\split_temporal.py
-    & $Python pipelines\analyze.py --data data\splits\test\features --output data\analysis\holdout
-    & $Python data\evaluate.py --data data\splits\test\features --truth data\splits\evaluation\test_true_causes.csv --analysis data\analysis\holdout | Set-Content data\analysis\holdout_metrics.json -Encoding utf8
+    & $Python pipelines\analyze.py --data data\splits\validation\features --output data\analysis\validation
+    & $Python data\evaluate.py --data data\splits\validation\features --truth data\splits\evaluation\validation_true_causes.csv --analysis data\analysis\validation | Set-Content data\analysis\validation_metrics.json -Encoding utf8
+    & $Python pipelines\analyze.py --data data\splits\test\features --output data\analysis\test
+    & $Python data\evaluate.py --data data\splits\test\features --truth data\splits\evaluation\test_true_causes.csv --analysis data\analysis\test | Set-Content data\analysis\test_metrics.json -Encoding utf8
     if ($env:DATABASE_URL) { & $Python data\load_postgres.py }
 }
 if ($Mode -in @("web", "all")) {

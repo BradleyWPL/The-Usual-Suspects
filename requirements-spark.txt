@@ -1,3 +1,10 @@
+# File: requirements-spark.txt
+# History: Version 0.2, October 17, 2026
+# Program: Declare dependencies for the optional PySpark scaling comparison.
+# Input: Java 17 and a separate Python 3.12 virtual environment.
+# Processing: Install Spark, pandas, and Arrow.
+# Output: An isolated data-processing benchmark environment.
+
 pyspark>=4,<5
 pandas>=2.2,<3
 pyarrow>=20,<25

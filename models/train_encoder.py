@@ -1,9 +1,10 @@
-"""Fine-tune a small sentence encoder with cause-paired contrastive examples.
-
-Training labels are read only to build positive/negative sentence pairs. Whole
-causes are held out; their text and answer key are written to separate paths
-for the later clustering comparison and are not passed to the trainer.
-"""
+# File: models/train_encoder.py
+# History: Version 0.2, October 17, 2026
+# Program: Fine-tune a sentence encoder with synthetic cause-paired contrastive examples.
+# Input: Training incidents, separate training labels, a base model, seed, and training settings.
+# Processing: Build positive/negative text pairs from the training partition and optimize a CoSENT sentence-transformer loss.
+# Output: A locally saved fine-tuned encoder and metadata; validation/test labels are not training inputs.
+"""Fine-tune a sentence encoder with synthetic cause-paired contrastive examples."""
 from __future__ import annotations
 
 import argparse
@@ -17,17 +18,22 @@ ROOT=Path(__file__).resolve().parents[1]
 SEED=20261016
 
 def read(path:Path)->list[dict[str,str]]:
+    """Read a UTF-8 CSV file into dictionaries."""
     with path.open(newline="",encoding="utf-8") as f:return list(csv.DictReader(f))
 
 def write(path:Path,rows:list[dict[str,str]])->None:
+    """Write row dictionaries to a CSV file, creating the parent directory first."""
     if not rows:return
     path.parent.mkdir(parents=True,exist_ok=True)
     with path.open("w",newline="",encoding="utf-8") as f:
         writer=csv.DictWriter(f,fieldnames=list(rows[0]));writer.writeheader();writer.writerows(rows)
 
 def main()->None:
+    """Build cause-paired training examples, train the encoder, and write model metadata."""
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--data",type=Path,default=ROOT/"data"/"generated")
+    parser.add_argument("--data",type=Path,default=ROOT/"data"/"splits"/"train"/"features")
+    parser.add_argument("--truth",type=Path,default=ROOT/"data"/"splits"/"evaluation"/"train_true_causes.csv",
+                        help="training-only labels; validation/test labels must not be passed here")
     parser.add_argument("--output",type=Path,default=ROOT/"data"/"experiments"/"encoder")
     parser.add_argument("--base-model",default="sentence-transformers/all-MiniLM-L6-v2")
     parser.add_argument("--epochs",type=float,default=1.0)
@@ -37,7 +43,7 @@ def main()->None:
     if args.epochs<=0 or args.pairs_per_cause<1 or not 0<args.holdout_fraction<.5:parser.error("invalid training settings")
 
     incidents=read(args.data/"incidents.csv")
-    labels={row["incident_id"]:row["cause_id"] for row in read(args.data/"true_causes.csv")}
+    labels={row["incident_id"]:row["cause_id"] for row in read(args.truth)}
     groups:dict[str,list[dict[str,str]]]=defaultdict(list)
     for incident in incidents:
         cause=labels.get(incident["incident_id"])
@@ -78,9 +84,9 @@ def main()->None:
     write(feature_dir/"incidents.csv",heldout_rows)
     for filename in ("configuration_items.csv","ci_dependencies.csv","cause_catalog.csv","changes.csv"):
         write(feature_dir/filename,read(args.data/filename))
-    write(args.output/"heldout"/"evaluation"/"true_causes.csv",[row for row in read(args.data/"true_causes.csv") if row["cause_id"] in heldout_causes])
+    write(args.output/"heldout"/"evaluation"/"true_causes.csv",[row for row in read(args.truth) if row["cause_id"] in heldout_causes])
     write(args.output/"training"/"incidents.csv",training_rows)
-    write(args.output/"training"/"true_causes.csv",[row for row in read(args.data/"true_causes.csv") if row["cause_id"] in training_causes])
+    write(args.output/"training"/"true_causes.csv",[row for row in read(args.truth) if row["cause_id"] in training_causes])
 
     metadata={"base_model":args.base_model,"fine_tuned_model":str(model_dir),"seed":SEED,"epochs":args.epochs,
               "positive_negative_pair_count":len(pairs),"training_cause_count":len(training_causes),

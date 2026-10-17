@@ -1,3 +1,10 @@
+# File: .dockerignore
+# History: Version 0.2, October 17, 2026
+# Program: Exclude local-only and generated files from the Docker build context.
+# Input: Paths relative to the repository root.
+# Processing: Omit Git metadata, virtual environments, local generated data, and caches.
+# Output: A smaller and safer Docker build context.
+
 .git
 .venv
 node_modules

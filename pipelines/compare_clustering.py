@@ -1,8 +1,10 @@
-"""Compare the TF-IDF baseline with sentence embeddings plus HDBSCAN.
-
-Install the optional dependencies from requirements-embedding.txt. The first
-run also downloads the configured pretrained sentence-transformer model.
-"""
+# File: pipelines/compare_clustering.py
+# History: Version 0.2, October 17, 2026
+# Program: Compare embedding-based HDBSCAN settings on a held-out incident feature set.
+# Input: Feature-only incidents, an encoder name/path, clustering parameters, and separate labels for scoring.
+# Processing: Encode text, cluster vectors across settings, and calculate evaluation metrics only after assignments are made.
+# Output: Comparison metrics and run configuration files for validation or final test reporting.
+"""Compare embedding-based HDBSCAN settings on a held-out incident feature set."""
 from __future__ import annotations
 
 import argparse
@@ -21,6 +23,7 @@ from analyze import LABEL_FILLER, analyze, normalize, rank_causes, read_csv
 
 
 def embedding_run(data_dir:Path,output:Path,model_name:str,min_cluster_size:int,min_samples:int|None)->dict[str,object]:
+    """Encode incident text, sweep HDBSCAN settings, and score completed clusters with separate labels."""
     import hdbscan
     from sentence_transformers import SentenceTransformer
 
@@ -59,6 +62,7 @@ def embedding_run(data_dir:Path,output:Path,model_name:str,min_cluster_size:int,
 
 
 def main()->None:
+    """Parse encoder, split, and sweep options before running clustering comparisons."""
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data",type=Path,default=ROOT/"data"/"generated")
     parser.add_argument("--output",type=Path,default=ROOT/"data"/"experiments"/"clustering")
@@ -78,7 +82,7 @@ def main()->None:
         manifest=embedding_run(args.data,run_dir,args.model,size,args.min_samples)
         results.append({"method":"sentence_transformers_hdbscan",**manifest,**evaluate(args.data,run_dir,args.truth)})
     (args.output/"comparison.json").write_text(json.dumps(results,indent=2),encoding="utf-8")
-    columns=["method","run_id","ari","purity_non_noise_clusters","noise_reduction_ratio","top1_cause_accuracy","top3_cause_accuracy","non_noise_clusters","noise_incidents"]
+    columns=["method","run_id","ari","purity_non_noise_clusters","noise_incident_fraction","top1_cause_accuracy","top3_cause_accuracy","non_noise_clusters","noise_incidents"]
     with (args.output/"comparison.csv").open("w",newline="",encoding="utf-8") as f:
         writer=csv.DictWriter(f,fieldnames=columns,extrasaction="ignore");writer.writeheader();writer.writerows(results)
     print(json.dumps(results,indent=2))

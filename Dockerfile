@@ -1,3 +1,10 @@
+# File: Dockerfile
+# History: Version 0.2, October 17, 2026
+# Program: Build a non-root container image for the local IncidentLens API.
+# Input: Locked Python requirements and the tracked project source.
+# Processing: Install dependencies, copy the app, create runtime directories, and run the pipeline/API.
+# Output: A runnable app image for Docker Compose.
+
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1

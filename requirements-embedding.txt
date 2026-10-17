@@ -1,3 +1,10 @@
+# File: requirements-embedding.txt
+# History: Version 0.2, October 17, 2026
+# Program: Declare the optional sentence-embedding and HDBSCAN experiment dependencies.
+# Input: A separate Python 3.12 virtual environment.
+# Processing: Install the encoder runtime and density clustering libraries.
+# Output: An isolated environment for embedding comparisons.
+
 sentence-transformers>=5.0,<6
 hdbscan>=0.8.40,<0.9
 scikit-learn>=1.7,<2
