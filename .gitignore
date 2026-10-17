@@ -1,0 +1,23 @@
+# Python environments and generated files
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+mlruns/
+
+# Local secrets and generated datasets
+.env
+.env.*
+!.env.example
+data/generated/
+data/analysis/
+*.sqlite3
+
+# Web tooling
+node_modules/
+web/dist/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/

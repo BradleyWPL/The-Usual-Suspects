@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#101a1b" />
+    <meta name="description" content="Review simulated incident clusters and evidence in IncidentLens." />
+    <title>IncidentLens · Problem review</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Main navigation">
+        <a class="brand" href="#overview" aria-label="IncidentLens home">
+          <span class="brand-mark"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3.5 27 9.8v12.4L16 28.5 5 22.2V9.8L16 3.5Z"/><path d="M11 17.3 14.2 20 21.5 12"/></svg></span>
+          <span class="brand-name">incident<span>lens</span><small>OPERATIONS INTELLIGENCE</small></span>
+        </a>
+        <div class="workspace-switch"><span class="workspace-glyph">N</span><span><small>WORKSPACE</small><strong>Northstar IT</strong></span><span class="chevron">⌄</span></div>
+        <div class="nav-label">WORKSPACE</div>
+        <nav class="primary-nav">
+          <a class="nav-item" href="#overview"><span class="nav-icon">◫</span>Overview</a>
+          <a class="nav-item active" href="#clusters" aria-current="page"><span class="nav-icon">⌘</span>Problem review<span class="nav-count">6</span></a>
+          <a class="nav-item" href="#signals"><span class="nav-icon">⌁</span>Signal monitor<span class="live-dot"></span></a>
+          <a class="nav-item" href="#systems"><span class="nav-icon">◈</span>Systems</a>
+        </nav>
+        <div class="nav-label nav-label-spaced">ANALYZE</div>
+        <nav class="primary-nav">
+          <a class="nav-item" href="#experiments"><span class="nav-icon">⌬</span>Experiments</a>
+          <a class="nav-item" href="#data"><span class="nav-icon">▤</span>Data explorer</a>
+        </nav>
+        <div class="sidebar-bottom">
+          <div class="environment-card"><div class="env-top"><span class="env-pulse"></span>DEMO ENVIRONMENT</div><p>Simulated service desk data</p><span class="env-note">No production systems connected</span></div>
+          <a class="nav-item" href="#settings"><span class="nav-icon">⚙</span>Settings</a>
+          <div class="profile"><div class="avatar">JD</div><span><strong>Jordan Davis</strong><small>Support engineer</small></span><button class="more-button" aria-label="Account menu">···</button></div>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div class="breadcrumbs"><span>Workspace</span><b>/</b><strong>Problem review</strong></div>
+          <div class="topbar-actions"><span class="dataset-chip"><span></span>SIMULATED DATA</span><button class="icon-button" aria-label="Help">?</button><button class="icon-button notification" aria-label="Notifications">♧<i></i></button><div class="top-avatar">JD</div></div>
+        </header>
+        <section class="page-wrap" id="clusters">
+          <div class="page-heading">
+            <div><div class="eyebrow"><span class="eyebrow-line"></span>MONDAY, OCTOBER 12, 2026 <span class="eyebrow-dot">·</span> LAST 24 HOURS</div><h1>Problem review</h1><p class="subtitle">Recurring patterns, surfaced with the evidence to investigate them.</p></div>
+            <div class="heading-actions"><button class="button button-secondary" id="export-button"><span class="button-icon">↧</span> Export view</button><button class="button button-primary" id="refresh-button"><span class="button-icon">↻</span> Refresh analysis</button></div>
+          </div>
+
+          <section class="stats-grid" aria-label="Incident overview">
+            <article class="stat-card"><div class="stat-top"><span>INCIDENTS ANALYZED</span><span class="stat-icon teal">⌁</span></div><div class="stat-value">2,481 <span class="trend positive">↗ 12.8%</span></div><div class="stat-foot">vs. previous 24 hour period</div><div class="sparkline teal-spark" aria-hidden="true"><svg viewBox="0 0 180 32" preserveAspectRatio="none"><path d="M0 26 C12 25 13 17 25 20 S40 28 50 17 68 20 77 14 91 21 103 11 121 17 131 8 143 16 153 5 168 10 180 2"/></svg></div></article>
+            <article class="stat-card"><div class="stat-top"><span>RECURRING CLUSTERS</span><span class="stat-icon violet">⌘</span></div><div class="stat-value">6 <span class="trend neutral">4 need review</span></div><div class="stat-foot">Across 7 systems</div><div class="sparkline violet-spark" aria-hidden="true"><svg viewBox="0 0 180 32" preserveAspectRatio="none"><path d="M0 20 C13 20 12 14 24 18 S38 22 49 12 62 15 73 10 89 15 100 18 116 10 126 13 138 6 149 11 163 7 180 4"/></svg></div></article>
+            <article class="stat-card"><div class="stat-top"><span>LIKELY PROBLEMS</span><span class="stat-icon amber">✳</span></div><div class="stat-value">4 <span class="trend warning">2 high confidence</span></div><div class="stat-foot">Ranked from changes &amp; dependencies</div><div class="sparkline amber-spark" aria-hidden="true"><svg viewBox="0 0 180 32" preserveAspectRatio="none"><path d="M0 25 C14 23 18 25 29 22 S45 21 56 17 68 21 79 16 92 16 104 13 120 18 130 12 144 14 154 7 168 10 180 3"/></svg></div></article>
+            <article class="stat-card"><div class="stat-top"><span>VOLUME SIGNAL</span><span class="stat-icon rose">⌁</span></div><div class="stat-value">Elevated <span class="signal-live"><i></i> LIVE</span></div><div class="stat-foot">Auth service · +3.4σ above baseline</div><div class="sparkline rose-spark" aria-hidden="true"><svg viewBox="0 0 180 32" preserveAspectRatio="none"><path d="M0 27 C13 27 14 24 25 25 S38 23 48 24 60 19 71 21 84 22 96 18 110 21 120 15 133 16 142 6 152 17 160 4 170 9 180 1"/></svg></div></article>
+          </section>
+
+          <section class="analysis-grid">
+            <article class="panel cluster-panel">
+              <div class="panel-heading"><div><div class="panel-title-row"><h2>Candidate clusters</h2><span class="count-pill">6</span></div><p>Ranked by recurrence and supporting signals</p></div><button class="text-button" id="view-all">View all <span>→</span></button></div>
+              <div class="filter-row"><label class="search-box"><span>⌕</span><input id="search-input" type="search" placeholder="Search clusters or systems" aria-label="Search clusters or systems"><kbd>⌘ K</kbd></label><label class="select-wrap"><span class="sr-only">Filter by status</span><select id="status-filter"><option value="all">All statuses</option><option value="review">Needs review</option><option value="proposed">Proposed</option></select><span class="select-caret">⌄</span></label><button class="filter-button" id="sort-button" title="Sort by incident count">⇅ <span>Sort</span></button></div>
+              <div class="cluster-table-wrap"><table class="cluster-table"><thead><tr><th>CLUSTER</th><th>INCIDENTS</th><th>FIRST SEEN</th><th>CONFIDENCE</th><th>STATUS</th><th><span class="sr-only">Open details</span></th></tr></thead><tbody id="cluster-rows"></tbody></table><div class="empty-state" id="empty-state" hidden>No clusters match your search.</div></div>
+              <div class="table-footer"><span>Showing <strong id="visible-count">6</strong> sample clusters</span><div class="pagination"><button disabled aria-label="Previous page">←</button><button class="page-current" aria-label="Page 1">1</button><button disabled aria-label="Next page">→</button></div></div>
+            </article>
+
+            <aside class="panel detail-panel" aria-live="polite">
+              <div class="detail-header"><div><div class="detail-kicker"><span class="severity-dot"></span><span id="detail-id">CLUSTER CL-2048</span><span class="detail-separator">·</span><span id="detail-state">NEEDS REVIEW</span></div><h2 id="detail-title">Authentication timeouts</h2></div><button class="detail-menu" aria-label="More cluster actions">···</button></div>
+              <div class="detail-meta"><span>◷ &nbsp;<span id="detail-time">First seen 09:14 today</span></span><span>⊙ &nbsp;<span id="detail-count">142 incidents</span></span></div>
+              <div class="system-row" id="detail-systems"><span class="system-tag">Auth Gateway</span><span class="system-tag">Identity API</span><span class="system-tag muted-tag">+1</span></div>
+              <div class="mini-chart"><div class="chart-labels"><span>INCIDENT VOLUME</span><span>LAST 12 HOURS <span class="chart-legend"><i></i> Tickets</span></span></div><div class="chart-area"><div class="chart-y"><span>40</span><span>20</span><span>0</span></div><div class="chart-plot"><div class="gridline g1"></div><div class="gridline g2"></div><div class="gridline g3"></div><div class="change-marker"><span>CHANGE APPLIED</span></div><svg viewBox="0 0 440 108" preserveAspectRatio="none" role="img" aria-label="Incident volume rises sharply after change at 09:00"><defs><linearGradient id="fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#55d4bd" stop-opacity=".28"/><stop offset="1" stop-color="#55d4bd" stop-opacity="0"/></linearGradient></defs><path class="area-path" d="M0 91 C30 89 32 92 53 87 S78 90 97 84 113 87 130 82 S153 84 170 79 189 83 205 75 S222 77 235 66 S249 70 264 47 S279 63 292 32 S310 49 324 25 S342 44 354 18 S370 39 382 13 S399 28 411 8 S429 17 440 4 L440 108 L0 108Z"/><path class="line-path" d="M0 91 C30 89 32 92 53 87 S78 90 97 84 113 87 130 82 S153 84 170 79 189 83 205 75 S222 77 235 66 S249 70 264 47 S279 63 292 32 S310 49 324 25 S342 44 354 18 S370 39 382 13 S399 28 411 8 S429 17 440 4"/></svg><div class="chart-x"><span>00:00</span><span>03:00</span><span>06:00</span><span>09:00</span><span>12:00</span></div></div></div></div>
+              <div class="cause-heading"><div><h3>Ranked root causes</h3><span>Based on available evidence</span></div><span class="model-chip">MODEL v0.3</span></div>
+              <div class="cause-list" id="cause-list"></div>
+              <div class="detail-footer"><span class="review-note"><span class="review-avatar">JD</span>Review before creating a problem</span><button class="button button-approve" id="propose-button"><span>＋</span> Propose problem</button></div>
+            </aside>
+          </section>
+          <footer class="page-footer"><span><span class="footer-shield">◇</span> &nbsp;Built for evidence led problem management</span><span>Analysis run <strong>12 min ago</strong> <span class="footer-separator">·</span> <a href="#runs">View run details →</a></span></footer>
+        </section>
+      </main>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>

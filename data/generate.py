@@ -1,0 +1,173 @@
+"""Generate a deterministic, fictional IT service-desk dataset."""
+from __future__ import annotations
+
+import argparse
+import csv
+import random
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+SEED = 20261016
+CAUSES = [
+    ("auth-cert", "Authentication gateway certificate rotation", "Auth Gateway", ["sign in keeps timing out", "login requests fail after redirect", "identity check is taking forever", "getting a gateway timeout when signing in", "authentication spins then fails"]),
+    ("auth-pool", "Identity provider connection pool exhaustion", "Identity API", ["single sign on is very slow", "identity requests are backing up", "users cannot complete the sign in flow", "login response is delayed", "authentication service is not responding"]),
+    ("pay-broker", "Payment broker partition rebalance", "Message Broker", ["payment confirmations are stuck in queue", "checkout is waiting on payment", "payment events are arriving late", "orders sit pending after payment", "payment processing is backing up"]),
+    ("pay-ledger", "Ledger write contention after index change", "Ledger", ["payment writes are failing", "ledger updates are timing out", "checkout cannot save payment status", "settlement records are delayed", "payment database writes are blocked"]),
+    ("report-query", "Warehouse query plan regression", "Warehouse", ["reports fail before finishing", "scheduled report is timing out", "analytics export keeps failing", "monthly report is stuck running", "report request returns a server error"]),
+    ("vpn-policy", "Remote access policy mismatch", "VPN Gateway", ["vpn reconnects every few minutes", "remote access drops after login", "cannot keep a vpn session open", "connection loops back to sign in", "remote session disconnects repeatedly"]),
+    ("inv-consumer", "Inventory event consumer backlog", "Event Bus", ["inventory count has not refreshed", "stock changes show up late", "product availability is stale", "inventory sync is falling behind", "catalog still shows the old quantity"]),
+    ("search-shards", "Search index shard allocation failure", "Search Service", ["search returns no results", "catalog search is unavailable", "product lookup fails to load", "search page keeps spinning", "results disappeared from item search"]),
+    ("mail-relay", "Outbound mail relay queue saturation", "Mail Relay", ["notification emails are delayed", "password reset message never arrives", "outbound email is still pending", "alerts are not reaching inboxes", "mail delivery is backed up"]),
+    ("device-registry", "Device registry lookup latency", "Device Registry", ["device enrollment is stuck", "managed laptop is missing from inventory", "device check in is delayed", "registration request keeps timing out", "new device does not appear in console"]),
+    ("storage-capacity", "Shared storage capacity threshold reached", "Shared Storage", ["shared files will not open", "upload fails on the team drive", "documents take too long to load", "file share reports unavailable", "saving to shared storage times out"]),
+    ("dns-cache", "Stale service discovery cache", "Service Discovery", ["internal app cannot find its service", "requests resolve to the old endpoint", "service address lookup fails", "connection goes to a retired host", "internal endpoint is not resolving"]),
+]
+
+SYSTEMS = [
+    ("ci-auth-gw", "Auth Gateway", "application", "Identity"),
+    ("ci-identity", "Identity API", "application", "Identity"),
+    ("ci-session", "Session Store", "database", "Identity"),
+    ("ci-directory", "Directory Service", "application", "Identity"),
+    ("ci-payments", "Payment API", "application", "Payments"),
+    ("ci-broker", "Message Broker", "middleware", "Payments"),
+    ("ci-ledger", "Ledger", "database", "Payments"),
+    ("ci-reporting", "Reporting Service", "application", "Analytics"),
+    ("ci-warehouse", "Warehouse", "database", "Analytics"),
+    ("ci-vpn", "VPN Gateway", "network", "Remote Access"),
+    ("ci-device", "Device Registry", "application", "Endpoint"),
+    ("ci-inventory", "Inventory API", "application", "Commerce"),
+    ("ci-eventbus", "Event Bus", "middleware", "Commerce"),
+    ("ci-search", "Search Service", "application", "Commerce"),
+    ("ci-catalog", "Catalog API", "application", "Commerce"),
+    ("ci-mail", "Mail Relay", "middleware", "Messaging"),
+    ("ci-storage", "Shared Storage", "storage", "Workplace"),
+    ("ci-discovery", "Service Discovery", "platform", "Platform"),
+    ("ci-dns", "Internal DNS", "network", "Platform"),
+    ("ci-metrics", "Metrics Collector", "platform", "Platform"),
+]
+
+EDGES = [
+    ("ci-directory", "ci-identity"), ("ci-identity", "ci-auth-gw"), ("ci-session", "ci-auth-gw"),
+    ("ci-broker", "ci-payments"), ("ci-ledger", "ci-payments"),
+    ("ci-warehouse", "ci-reporting"), ("ci-device", "ci-vpn"),
+    ("ci-eventbus", "ci-inventory"), ("ci-catalog", "ci-search"),
+    ("ci-dns", "ci-discovery"), ("ci-discovery", "ci-auth-gw"), ("ci-discovery", "ci-payments"),
+    ("ci-metrics", "ci-reporting"),
+]
+CAUSE_PARENTS = {
+    "auth-cert": ["ci-identity"], "auth-pool": ["ci-directory"], "pay-broker": ["ci-broker"],
+    "pay-ledger": ["ci-ledger"], "report-query": ["ci-warehouse"], "vpn-policy": ["ci-device"],
+    "inv-consumer": ["ci-eventbus"], "search-shards": ["ci-catalog"], "mail-relay": ["ci-mail"],
+    "device-registry": ["ci-device"], "storage-capacity": ["ci-storage"], "dns-cache": ["ci-dns"],
+}
+
+def write_csv(path: Path, fields: list[str], rows: list[dict[str, object]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows)
+
+def generate(output: Path, incidents_per_cause: int = 180, noise_count: int = 450) -> dict[str, int]:
+    rng = random.Random(SEED)
+    start = datetime(2026, 9, 16, tzinfo=timezone.utc)
+    system_id = {name: ci for ci, name, _, _ in SYSTEMS}
+    used_incident_ids: set[str] = set()
+
+    def new_incident_id() -> str:
+        # Random IDs avoid encoding cause, generation order, or noise membership.
+        while True:
+            value = f"INC-{rng.randrange(1_000_000_000):09d}"
+            if value not in used_incident_ids:
+                used_incident_ids.add(value)
+                return value
+
+    incident_rows: list[dict[str, object]] = []
+    truth_rows: list[dict[str, object]] = []
+    change_rows: list[dict[str, object]] = []
+    cause_windows: dict[str, datetime] = {}
+
+    # Event windows are intentionally staggered. A subset has no related change record.
+    for number, (cause_id, summary, affected_name, phrases) in enumerate(CAUSES):
+        onset = start + timedelta(days=number * 2, hours=rng.randint(6, 14))
+        cause_windows[cause_id] = onset
+        affected_ci = system_id[affected_name]
+        has_change = number % 4 != 3
+        if has_change:
+            change_rows.append({"change_id": f"CHG-{7000+number}", "ci_id": rng.choice(CAUSE_PARENTS[cause_id]),
+                                "applied_at": (onset - timedelta(minutes=rng.randint(18, 95))).isoformat(),
+                                "summary": summary, "risk": rng.choice(["low", "medium", "high"]), "outcome": "completed"})
+        # An unrelated change is added near selected incidents to create a hard negative.
+        if number % 3 == 1:
+            change_rows.append({"change_id": f"CHG-{8000+number}", "ci_id": system_id["Metrics Collector"],
+                                "applied_at": (onset - timedelta(minutes=35)).isoformat(),
+                                "summary": "Routine telemetry agent maintenance", "risk": "low", "outcome": "completed"})
+        for index in range(incidents_per_cause):
+            opened = onset + timedelta(minutes=rng.randint(0, 1250), seconds=rng.randint(0, 59))
+            phrase = rng.choice(phrases)
+            host = f"{affected_name.lower().replace(' ', '-')}-{rng.randint(1, 28):02d}.corp.example"
+            ticket = f"INC{rng.randint(100000, 999999)}"
+            prefix = rng.choice(["", "please help: ", "urgent - ", "monitor alert: ", "seeing this again: "])
+            suffix = rng.choice(["", " since this morning", " after reconnecting", " [retrying]", " - " + ticket])
+            text = f"{prefix}{phrase} on {host}{suffix}"
+            incident_id = new_incident_id()
+            resolved = opened + timedelta(minutes=rng.randint(12, 420))
+            incident_rows.append({"incident_id": incident_id, "opened_at": opened.isoformat(), "short_description": text,
+                                  "description": f"{text}. Requester reports impact to {affected_name}; reference {ticket}.",
+                                  "ci_id": affected_ci, "category": rng.choice(["application", "access", "network", "other"]),
+                                  "priority": rng.choices([1, 2, 3, 4, 5], weights=[2, 12, 43, 33, 10])[0],
+                                  "assignment_group": rng.choice(["Service Desk", "Platform Operations", "Business Applications"]),
+                                  "state": "resolved", "resolved_at": resolved.isoformat()})
+            truth_rows.append({"incident_id": incident_id, "cause_id": cause_id})
+
+    # One-off requests have no recurring cause and should usually remain noise.
+    actions = ["reset", "update", "add", "remove", "restore", "replace", "renew", "move", "install", "review", "rename", "archive"]
+    resources = ["password", "calendar permission", "shared folder", "browser profile", "meeting room", "laptop dock",
+                 "software license", "mailing list", "project workspace", "printer mapping", "mobile device", "team dashboard"]
+    workspaces = ["atlas", "juniper", "northstar", "field-notes", "ledger-demo", "planning", "onboarding", "design-review",
+                  "quarterly-close", "support-rotation", "inventory-audit", "release-checklist"]
+    details = ["for a new starter", "before the review meeting", "for the regional team", "after a role change",
+               "for next week's handoff", "while setting up a loaner", "for the afternoon workshop", "after a department move",
+               "for the archived project", "while preparing a demo", "for a temporary assignment", "before travel"]
+    ci_ids = [row[0] for row in SYSTEMS]
+    for index in range(noise_count):
+        opened = start + timedelta(minutes=rng.randint(0, 30*24*60))
+        phrase = f"{rng.choice(actions)} {rng.choice(resources)} for {rng.choice(workspaces)} {rng.choice(details)}"
+        incident_id = new_incident_id()
+        text = f"{phrase} ({incident_id})"
+        incident_rows.append({"incident_id": incident_id, "opened_at": opened.isoformat(), "short_description": text,
+                              "description": f"{text}. Request submitted through the employee support portal.",
+                              "ci_id": rng.choice(ci_ids), "category": rng.choice(["access", "hardware", "software", "other"]),
+                              "priority": rng.choices([1, 2, 3, 4, 5], weights=[1, 8, 37, 40, 14])[0],
+                              "assignment_group": "Service Desk", "state": "resolved",
+                              "resolved_at": (opened + timedelta(minutes=rng.randint(15, 600))).isoformat()})
+
+    # Stable ordering makes regenerated CSVs byte-for-byte repeatable.
+    incident_rows.sort(key=lambda row: str(row["opened_at"]))
+    write_csv(output / "incidents.csv", list(incident_rows[0]), incident_rows)
+    write_csv(output / "true_causes.csv", ["incident_id", "cause_id"], truth_rows)
+    write_csv(output / "changes.csv", ["change_id", "ci_id", "applied_at", "summary", "risk", "outcome"], change_rows)
+    write_csv(output / "configuration_items.csv", ["ci_id", "name", "ci_type", "service", "environment"],
+              [{"ci_id": ci, "name": name, "ci_type": kind, "service": service, "environment": "simulated"} for ci, name, kind, service in SYSTEMS])
+    write_csv(output / "ci_dependencies.csv", ["parent_ci_id", "child_ci_id"],
+              [{"parent_ci_id": parent, "child_ci_id": child} for parent, child in EDGES])
+    write_csv(output / "cause_catalog.csv", ["cause_id", "candidate_cause", "primary_ci_id"],
+              [{"cause_id": cause_id, "candidate_cause": summary, "primary_ci_id": system_id[affected]} for cause_id, summary, affected, _ in CAUSES])
+    # Keep raw labels outside feature files. The catalog is for candidate hypotheses, not incident features.
+    return {"incidents": len(incident_rows), "known_cause_incidents": len(truth_rows), "one_off_incidents": noise_count,
+            "causes": len(CAUSES), "changes": len(change_rows)}
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", type=Path, default=Path(__file__).parent / "generated")
+    parser.add_argument("--incidents-per-cause", type=int, default=180)
+    parser.add_argument("--noise-count", type=int, default=450)
+    args = parser.parse_args()
+    if args.incidents_per_cause < 1 or args.noise_count < 0:
+        parser.error("incident counts must be positive (noise may be zero)")
+    counts = generate(args.output, args.incidents_per_cause, args.noise_count)
+    print(f"Generated deterministic simulated dataset at {args.output}")
+    print(" | ".join(f"{key}: {value:,}" for key, value in counts.items()))
+
+if __name__ == "__main__":
+    main()
