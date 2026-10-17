@@ -15,6 +15,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   plugins: [react()],
   build: {
+    // Keep production outputs minified and do not publish source maps from the component demo.
+    sourcemap: false,
     rollupOptions: {
       input: {
         plain: resolve(here, 'demos/plain/index.html'),

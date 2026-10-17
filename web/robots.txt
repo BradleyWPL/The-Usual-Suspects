@@ -1,0 +1,8 @@
+# File: web/robots.txt
+# History: Version 0.3, October 17, 2026
+# Program: Prevent indexing of this local, synthetic-data review application.
+# Input: Requests from web crawlers.
+# Processing: Disallow crawling until a public domain and deployment are configured.
+# Output: A private-by-default crawler policy for the demo.
+User-agent: *
+Disallow: /

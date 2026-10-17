@@ -20,7 +20,7 @@ function Demo(){
   },[]);
   const ClusterCard:any='lens-cluster-card';const EvidenceList:any='lens-evidence-list';const ProposalForm:any='lens-proposal-form';
   // Render the standalone component samples and status text for the custom event bridge.
-  return <main><p className="eyebrow">INCIDENTLENS WEB COMPONENTS</p><h1>React demo</h1><p className="intro">React renders the same standards-based custom elements.</p><div className="grid"><ClusterCard cluster-id="CL-002" title="Payment status updates delayed" count="74" status="Needs review"/><EvidenceList ref={evidence}/><ProposalForm ref={proposal} cluster-id="CL-002" candidate="Ledger write contention"/></div><p role="status">{saved?'Proposal event received. Human review is still required.':'Review the proposal to see the custom event.'}</p></main>;
+  return <main><p className="eyebrow">THE USUAL SUSPECTS · INCIDENTLENS</p><h1>Component integration preview</h1><p className="intro">Preview the review components hosted inside a framework application.</p><div className="grid"><ClusterCard cluster-id="CL-002" title="Payment status updates delayed" count="74" status="Needs review"/><EvidenceList ref={evidence}/><ProposalForm ref={proposal} cluster-id="CL-002" candidate="Ledger write contention"/></div><p role="status">{saved?'Proposal event received. Human review is still required.':'Submit the proposal form to preview its review event.'}</p></main>;
 }
 
 createRoot(document.getElementById('root')!).render(<Demo/>);

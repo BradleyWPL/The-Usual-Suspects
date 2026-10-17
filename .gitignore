@@ -16,6 +16,7 @@ mlruns/
 .env
 .env.*
 !.env.example
+backups/
 data/generated/
 data/analysis/
 data/splits/

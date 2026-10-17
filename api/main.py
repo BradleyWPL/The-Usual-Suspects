@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import csv
+import html
 import json
 import os
 import sqlite3
@@ -15,12 +16,14 @@ import psycopg
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
+from urllib.parse import urlsplit
+from xml.sax.saxutils import escape as xml_escape
 
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Path as PathParam, Query, Request
+from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = Path(os.getenv("INCIDENTLENS_DATA_DIR", ROOT / "data" / "generated"))
@@ -28,13 +31,61 @@ ANALYSIS_DIR = Path(os.getenv("INCIDENTLENS_ANALYSIS_DIR", ROOT / "data" / "anal
 STATE_DB = Path(os.getenv("INCIDENTLENS_STATE_DB", ROOT / "data" / "state" / "reviews.sqlite3"))
 DATABASE_URL = os.getenv("DATABASE_URL")
 WEB_DIR = ROOT / "web"
+PUBLIC_SITE_URL = os.getenv("PUBLIC_SITE_URL", "").rstrip("/")
+parsed_public_url = urlsplit(PUBLIC_SITE_URL) if PUBLIC_SITE_URL else None
+if PUBLIC_SITE_URL and (
+    parsed_public_url.scheme != "https" or not parsed_public_url.netloc
+    or parsed_public_url.username or parsed_public_url.password
+    or parsed_public_url.query or parsed_public_url.fragment
+):
+    raise RuntimeError("PUBLIC_SITE_URL must be an HTTPS base URL without credentials, query, or fragment")
 
 app = FastAPI(title="IncidentLens API", version="0.2.0", description="Local API for synthetic incident analysis and human review.")
 
 
 class ReviewUpdate(BaseModel):
     status: Literal["needs_review", "proposed", "approved", "dismissed"]
-    note: str | None = None
+    note: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("note")
+    @classmethod
+    def trim_note(cls, value: str | None) -> str | None:
+        """Trim reviewer input and normalize an empty note to no note."""
+        # Store bounded, trimmed plain text; output escaping remains the UI's responsibility.
+        return value.strip() or None if value is not None else None
+
+
+def security_headers(path: str, scheme: str) -> dict[str, str]:
+    """Return browser and cache headers for an application response."""
+    # Keep the policy centralized so every route receives the same baseline protections.
+    headers = {
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+        "Content-Security-Policy": (
+            "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; "
+            "form-action 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'"
+        ),
+        "Cross-Origin-Resource-Policy": "same-origin",
+    }
+    # Advertise HSTS only if the request actually arrived over TLS.
+    if scheme == "https":
+        headers["Strict-Transport-Security"] = "max-age=31536000"
+    if path.startswith("/api/"):
+        headers["Cache-Control"] = "no-store"
+    return headers
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """Set browser security headers on API and static-file responses."""
+    # Apply the centralized header policy to API, static, and error responses alike.
+    response = await call_next(request)
+    for name, value in security_headers(request.url.path, request.url.scheme).items():
+        response.headers[name] = value
+    return response
 
 
 def read_csv(path: Path) -> list[dict[str, str]]:
@@ -178,7 +229,9 @@ def dashboard() -> dict[str, object]:
 
 
 @app.get("/api/clusters")
-def list_clusters(q: str = "", status: str = "all", sort: Literal["desc", "asc"] = "desc",
+def list_clusters(q: str = Query("", max_length=120),
+                  status: Literal["all", "needs_review", "proposed", "approved", "dismissed"] = "all",
+                  sort: Literal["desc", "asc"] = "desc",
                   offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200)) -> dict[str, object]:
     """Search, filter, sort, and paginate candidate cluster summaries."""
     # Filter before sorting and pagination so total describes the visible result set.
@@ -195,7 +248,7 @@ def list_clusters(q: str = "", status: str = "all", sort: Literal["desc", "asc"]
 
 
 @app.get("/api/clusters/{cluster_id}")
-def cluster_detail(cluster_id: str) -> dict[str, object]:
+def cluster_detail(cluster_id: Annotated[str, PathParam(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")]) -> dict[str, object]:
     """Return one cluster with its ranked causes, timeline, change marker, and incident sample."""
     # Return an explicit 404 when the requested ID is no longer in the current analysis.
     row = next((item for item in build_clusters() if item["id"] == cluster_id), None)
@@ -224,7 +277,7 @@ def cluster_detail(cluster_id: str) -> dict[str, object]:
 
 
 @app.post("/api/clusters/{cluster_id}/review")
-def review_cluster(cluster_id: str, update: ReviewUpdate) -> dict[str, object]:
+def review_cluster(cluster_id: Annotated[str, PathParam(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")], update: ReviewUpdate) -> dict[str, object]:
     """Validate and persist an authorized review status for an existing cluster."""
     # Prevent stale clients from creating review records for unknown cluster IDs.
     exists = any(row["id"] == cluster_id for row in build_clusters())
@@ -248,10 +301,43 @@ def incident_volume() -> list[dict[str, object]]:
 
 
 @app.get("/")
-def index() -> FileResponse:
+def index() -> HTMLResponse:
     """Serve the IncidentLens dashboard HTML page."""
     # Return the SPA shell; the static mount below resolves scripts, styles, and assets.
-    return FileResponse(WEB_DIR / "index.html")
+    page = (WEB_DIR / "index.html").read_text(encoding="utf-8")
+    if PUBLIC_SITE_URL:
+        # Use only a configured HTTPS base URL; escaping prevents metadata injection.
+        canonical = html.escape(f"{PUBLIC_SITE_URL}/", quote=True)
+        metadata = (
+            f'<link rel="canonical" href="{canonical}" />\n'
+            f'<meta property="og:url" content="{canonical}" />\n'
+            f'<meta property="og:image" content="{html.escape(PUBLIC_SITE_URL, quote=True)}/social-share.svg" />\n'
+            '<meta property="og:image:alt" content="The Usual Suspects incident review dashboard" />'
+        )
+        page = page.replace("</head>", f"  {metadata}\n  </head>", 1)
+    return HTMLResponse(page)
+
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+def robots() -> str:
+    """Disallow crawling locally and allow it only after a public HTTPS URL is configured."""
+    # Avoid publishing a crawlable site before the owner configures its real domain.
+    if not PUBLIC_SITE_URL:
+        return "User-agent: *\nDisallow: /\n"
+    return f"User-agent: *\nAllow: /\nSitemap: {PUBLIC_SITE_URL}/sitemap.xml\n"
+
+
+@app.get("/sitemap.xml")
+def sitemap() -> Response:
+    """Publish the single-page sitemap only when the public domain is configured."""
+    # A sitemap must contain absolute public URLs; localhost is not a valid substitute.
+    if not PUBLIC_SITE_URL:
+        raise HTTPException(404, "Set PUBLIC_SITE_URL to the deployed HTTPS domain to publish a sitemap.")
+    location = xml_escape(f"{PUBLIC_SITE_URL}/")
+    return Response(
+        content=f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>{location}</loc></url></urlset>',
+        media_type="application/xml",
+    )
 
 
 app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")

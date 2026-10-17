@@ -1,0 +1,8 @@
+<!-- File: web/favicon.svg | History: Version 0.3, October 17, 2026 -->
+<!-- Program: Provide a compact browser-tab mark for The Usual Suspects. -->
+<!-- Input: Vector geometry and brand colors. Processing: Draw a monogram in a rounded tile. Output: Scalable favicon artwork. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="The Usual Suspects">
+  <rect width="64" height="64" rx="15" fill="#173d36" />
+  <path d="M17 14h30v9H36v27h-9V23H17z" fill="#80dfc8" />
+  <circle cx="46" cy="46" r="5" fill="#f0c77d" />
+</svg>

@@ -68,10 +68,17 @@ data/schema.sql defines incidents, systems, dependencies, changes, clustering ru
 The reproducible local stack starts PostgreSQL 18 and the app together:
 
 ```powershell
+Copy-Item .env.example .env
+# Generate two different values with: py -3 -c "import secrets; print(secrets.token_hex(32))"
+# Paste them into POSTGRES_ADMIN_PASSWORD and APP_DATABASE_PASSWORD in .env.
 docker compose up --build
 ```
 
-Open <http://localhost:8000>. Docker generates the quick dataset, analyzes it, loads the records into PostgreSQL, and starts the API. The local demo database credentials are for development only. To load data into another PostgreSQL instance, set DATABASE_URL and run py -3 data/load_postgres.py after generation and analysis.
+Open <http://127.0.0.1:8000>. Docker generates the quick dataset, analyzes it, loads the records with a short-lived administrator connection, then starts the API with a restricted database role. The database port and web app are bound to this computer only. `.env` is ignored by Git; never paste production credentials into tracked files. PostgreSQL stores synthetic records and review state only.
+
+To create a local database backup while the Compose stack is running, use `py -3 ops/backup_postgres.py`. It writes a timestamped archive under `backups/`, keeps 30 days by default, and does not commit backups to Git. For automatic backups, schedule this command with Windows Task Scheduler and store a second copy outside this computer.
+
+The app is not a production service: it has no login, account recovery, or production TLS termination. It is loopback-bound and uses synthetic data. Before a public deployment, configure an owned domain and HTTPS reverse proxy, add an authentication provider and per-user authorization, set production backup/restore schedules, and review the deployment-specific rate limits and spend alerts. `PUBLIC_SITE_URL` enables the canonical URL and one-page sitemap only after you set the real HTTPS domain. The `robots.txt` policy keeps the local demo out of search results.
 
 ## API
 
@@ -123,6 +130,10 @@ The quick profile contains 15 known causes plus 450 one-off requests. The benchm
 - Report measured results with dataset size, split, method, settings, and simulator caveat.
 - No model score is a calibrated probability.
 - Human review remains required before creating a problem record.
+
+## Security and public deployment
+
+See [docs/security.md](docs/security.md) for the controls implemented for this loopback-only synthetic demo and the authentication, HTTPS, domain, backup, and operations work required before public deployment.
 - The local API is for development and portfolio demonstration, not production deployment.
 
 ## Repository map

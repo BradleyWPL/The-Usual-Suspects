@@ -14,13 +14,28 @@ const DEMO_CLUSTERS = [
 /** Find one dashboard element by its CSS selector. */
 const $ = (selector) => document.querySelector(selector);
 const rows = $('#cluster-rows');
+const mobileMenuButton = $('#mobile-menu-button');
+const mobileNavBackdrop = $('#mobile-nav-backdrop');
 /** Escape API or user-provided text before it is inserted into the dashboard markup. */
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+/** Clamp externally supplied percentage values before using them as visible text or CSS widths. */
+const safePercent = (value) => { const number = Number(value); return Number.isFinite(number) ? Math.min(100, Math.max(0, number)) : 0; };
 let clusters = [];
 let selectedId = null;
 let sortDescending = true;
 let apiAvailable = false;
 let dashboardSummary = {};
+
+/** Open or close the responsive navigation and keep its button state accessible. */
+function setMobileNavOpen(open) {
+  // Use the same state for visual visibility, screen-reader state, and Escape handling.
+  document.querySelector('.sidebar').classList.toggle('is-open', open);
+  document.body.classList.toggle('mobile-menu-open', open);
+  mobileNavBackdrop.hidden = !open;
+  mobileMenuButton.setAttribute('aria-expanded', String(open));
+  mobileMenuButton.setAttribute('aria-label', open ? 'Close navigation' : 'Open navigation');
+  if (open) document.querySelector('#main-navigation a')?.focus();
+}
 
 /** Convert an API status value into the short label shown in the review UI. */
 function statusLabel(status) {
@@ -69,11 +84,12 @@ function renderRows() {
   $('#empty-state').hidden = filtered.length > 0;
   rows.innerHTML = filtered.map((item) => {
     const label = statusLabel(item.status);
+    const confidence = safePercent(item.confidence);
     return `<tr data-id="${esc(item.id)}" class="${item.id === selectedId ? 'selected' : ''}" tabindex="0" aria-label="Open ${esc(item.title)}">
       <td><div class="cluster-title-cell"><span class="cluster-symbol">⌁</span><span><span class="cluster-main">${esc(item.title)}</span><span class="cluster-id">${esc(item.id)}</span></span></div></td>
       <td><span class="incident-number">${Number(item.count).toLocaleString()}</span><span class="incident-caption">incidents</span></td>
       <td>${formatTime(item.first_seen)} <span class="incident-caption">UTC</span></td>
-      <td><span class="confidence">${item.confidence}% <span class="confidence-bar"><i style="width:${item.confidence}%"></i></span></span></td>
+      <td><span class="confidence">${confidence}% <progress class="confidence-bar" value="${confidence}" max="100" aria-label="Top-cause evidence score"></progress></span></td>
       <td><span class="status-pill status-${esc(item.status)}">${esc(label)}</span></td><td><span class="row-arrow">›</span></td>
     </tr>`;
   }).join('');
@@ -89,7 +105,7 @@ function renderDetail(id) {
   $('#detail-time').textContent = `First seen ${formatTime(item.first_seen)} UTC`;
   $('#detail-count').textContent = `${Number(item.count).toLocaleString()} incidents`;
   $('#detail-systems').innerHTML = item.systems.slice(0,2).map((system) => `<span class="system-tag">${esc(system)}</span>`).join('') + (item.systems.length > 2 ? `<span class="system-tag muted-tag">+${item.systems.length-2}</span>` : '');
-  $('#cause-list').innerHTML = (item.causes || []).map((cause,index) => `<article class="cause-card"><div class="cause-top"><span class="rank-badge">${index+1}</span><span class="cause-name">${esc(cause.candidate_cause)}</span><span class="cause-score">${cause.score_percent}%</span></div><p class="cause-reason">${(cause.evidence || []).map(esc).join(' ')}</p></article>`).join('') || '<p class="cause-reason">No cause candidates were recorded for this cluster.</p>';
+  $('#cause-list').innerHTML = (item.causes || []).map((cause,index) => `<article class="cause-card"><div class="cause-top"><span class="rank-badge">${index+1}</span><span class="cause-name">${esc(cause.candidate_cause)}</span><span class="cause-score">${safePercent(cause.score_percent)}%</span></div><p class="cause-reason">${(cause.evidence || []).map(esc).join(' ')}</p></article>`).join('') || '<p class="cause-reason">No cause candidates were recorded for this cluster.</p>';
   const propose = $('#propose-button');
   propose.disabled = ['proposed','approved','dismissed'].includes(item.status);
   propose.innerHTML = item.status === 'proposed' ? '<span>✓</span> Proposal saved' : item.status === 'approved' ? '<span>✓</span> Approved' : item.status === 'dismissed' ? 'Dismissed' : '<span>＋</span> Propose problem';
@@ -145,13 +161,24 @@ $('#sort-button').addEventListener('click', () => { sortDescending = !sortDescen
 // This handler saves an explicit human proposal action to the configured review store.
 $('#propose-button').addEventListener('click', async () => {
   const item = clusters.find((cluster) => cluster.id === selectedId); if (!item || item.status !== 'needs_review') return;
-  if (apiAvailable) {
-    const response = await fetch(`/api/clusters/${encodeURIComponent(item.id)}/review`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'proposed'})});
-    if (!response.ok) { toast('Could not save the proposal.'); return; }
-  } else {
-    localStorage.setItem(`incidentlens-review:${item.id}`,'proposed');
+  const button = $('#propose-button');
+  button.disabled = true;
+  try {
+    if (apiAvailable) {
+      // Confirm the server saved the review before updating the visible cluster state.
+      const response = await fetch(`/api/clusters/${encodeURIComponent(item.id)}/review`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'proposed'})});
+      if (!response.ok) throw new Error(`Review endpoint returned ${response.status}`);
+    } else {
+      // Keep preview-only decisions in this browser and clearly label the sample mode.
+      localStorage.setItem(`incidentlens-review:${item.id}`,'proposed');
+    }
+    item.status = 'proposed'; renderDetail(selectedId); renderSummary(); toast(`Proposal saved for ${item.id}. Human review required.`);
+  } catch {
+    // Show a clear failure message and leave the cluster in its prior review state.
+    toast('Could not save the proposal. Check the connection and try again.');
+  } finally {
+    button.disabled = item.status !== 'needs_review';
   }
-  item.status = 'proposed'; renderDetail(selectedId); renderSummary(); toast(`Proposal saved for ${item.id}. Human review required.`);
 });
 // This handler refreshes analysis data without losing the current page context.
 $('#refresh-button').addEventListener('click', async (event) => {
@@ -169,6 +196,10 @@ $('#view-all').addEventListener('click', () => { $('#status-filter').value = 'al
 // This global keyboard handler supports the search shortcut and Escape-to-clear behavior.
 document.addEventListener('keydown', (event) => {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); $('#search-input').focus(); }
-  if (event.key === 'Escape') { $('#search-input').value = ''; renderRows(); $('#search-input').blur(); }
+  if (event.key === 'Escape') { $('#search-input').value = ''; renderRows(); $('#search-input').blur(); setMobileNavOpen(false); }
 });
+mobileMenuButton.addEventListener('click', () => setMobileNavOpen(mobileMenuButton.getAttribute('aria-expanded') !== 'true'));
+mobileNavBackdrop.addEventListener('click', () => setMobileNavOpen(false));
+document.querySelectorAll('#main-navigation a').forEach((link) => link.addEventListener('click', () => setMobileNavOpen(false)));
+$('#copyright-year').textContent = String(new Date().getFullYear());
 loadDashboard();

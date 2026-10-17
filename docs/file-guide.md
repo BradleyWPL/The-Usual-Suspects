@@ -8,7 +8,7 @@ Output: A maintainer index for source, configuration, and generated manifest fil
 -->
 # File guide
 
-Source files with comment syntax start with an IPO header: **File, History, Program, Input, Processing, and Output**. Python functions and methods have docstrings; JavaScript and TypeScript functions/methods have JSDoc or an adjacent explanation; SQL and shell files explain their steps inline.
+Source files with comment syntax start with an IPO header: **File, History, Program, Input, Processing, and Output**. Python functions and methods have docstrings plus comments at meaningful processing steps; JavaScript and TypeScript functions/methods have JSDoc or an adjacent explanation plus section comments for non-obvious logic; SQL and shell files explain their steps inline.
 
 ## Application and data code
 
@@ -18,6 +18,7 @@ Source files with comment syntax start with an IPO header: **File, History, Prog
 - `data/evaluate.py` — scores predictions against a separate answer-key path after inference.
 - `data/realism_report.py` — summarizes data distributions and writes a blank human-review worksheet.
 - `data/load_postgres.py` and `data/schema.sql` — create and populate the local relational store.
+- `data/provision_postgres.py` — provisions the Compose API's restricted database role.
 - `pipelines/analyze.py` — runs the sparse TF-IDF clustering baseline and evidence ranker.
 - `pipelines/compare_clustering.py` — runs the optional embedding/HDBSCAN comparison.
 - `models/` — contains optional text-encoder and hourly-spike experiments.
@@ -27,6 +28,8 @@ Source files with comment syntax start with an IPO header: **File, History, Prog
 - `run.ps1` — sets up the local Python environment, regenerates/evaluates the quick workflow, and launches the API.
 - `Dockerfile`, `compose.yaml`, `.dockerignore` — define the local app/PostgreSQL development stack.
 - `ops/` — provides a scheduled shell-job example and cron entry.
+- `ops/backup_postgres.py` — creates a timestamped local database archive and prunes old backups.
+- `docs/security.md` — records local-demo controls and public-deployment requirements.
 - `requirements*.txt` — separate core and optional Python dependency sets; the lockfile pins core dependencies.
 - `README.md`, `docs/architecture.md`, and `docs/experiments.md` — explain user setup, data boundaries, architecture, and optional workflows.
 

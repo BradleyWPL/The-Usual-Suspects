@@ -1,0 +1,17 @@
+<!--
+File: web/llms.txt
+History: Version 0.3, October 17, 2026
+Program: Summarize the project context for language-model crawlers.
+Input: The project identity, data scope, and review limitations.
+Processing: State the synthetic-data and human-review boundaries in plain text.
+Output: A short, accurate project description for compatible crawlers.
+-->
+# The Usual Suspects
+
+> IncidentLens is a local demonstration that groups synthetic IT incidents and presents evidence for human review.
+
+- The application uses generated sample records only.
+- Root-cause scores are heuristic evidence scores, not probabilities.
+- Human review is required before creating a problem record.
+- The source repository is available at https://github.com/BradleyWPL/The-Usual-Suspects.
+- The local demo is not an authenticated production service and must not receive private incident data.

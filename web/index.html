@@ -13,7 +13,11 @@ Output: The page elements consumed and updated by web/app.js.
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#101a1b" />
     <meta name="description" content="The Usual Suspects — synthetic incident analysis and review in IncidentLens." />
-    <title>The Usual Suspects · IncidentLens problem review</title>
+    <meta property="og:title" content="The Usual Suspects · IncidentLens" />
+    <meta property="og:description" content="Review synthetic incident patterns and their supporting evidence." />
+    <meta property="og:type" content="website" />
+    <title>The Usual Suspects | IncidentLens Problem Review</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
@@ -23,34 +27,26 @@ Output: The page elements consumed and updated by web/app.js.
   <body>
     <div class="app-shell">
       <aside class="sidebar" aria-label="Main navigation">
-        <a class="brand" href="#overview" aria-label="IncidentLens home">
+        <a class="brand" href="/" aria-label="The Usual Suspects home">
           <span class="brand-mark"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3.5 27 9.8v12.4L16 28.5 5 22.2V9.8L16 3.5Z"/><path d="M11 17.3 14.2 20 21.5 12"/></svg></span>
-          <span class="brand-name">incident<span>lens</span><small>OPERATIONS INTELLIGENCE</small></span>
+          <span class="brand-name">The Usual Suspects<small>INCIDENTLENS</small></span>
         </a>
-        <div class="workspace-switch"><span class="workspace-glyph">U</span><span><small>PROJECT WORKSPACE</small><strong>The Usual Suspects</strong></span><span class="chevron">⌄</span></div>
+        <div class="workspace-switch"><span class="workspace-glyph">U</span><span><small>PROJECT WORKSPACE</small><strong>The Usual Suspects</strong></span></div>
         <div class="nav-label">WORKSPACE</div>
-        <nav class="primary-nav">
-          <a class="nav-item" href="#overview"><span class="nav-icon">◫</span>Overview</a>
+        <nav class="primary-nav" id="main-navigation" aria-label="Main navigation">
           <a class="nav-item active" href="#clusters" aria-current="page"><span class="nav-icon">⌘</span>Problem review<span class="nav-count" data-summary="cluster_count">0</span></a>
-          <a class="nav-item" href="#signals"><span class="nav-icon">⌁</span>Signal monitor<span class="live-dot"></span></a>
-          <a class="nav-item" href="#systems"><span class="nav-icon">◈</span>Systems</a>
-        </nav>
-        <div class="nav-label nav-label-spaced">ANALYZE</div>
-        <nav class="primary-nav">
-          <a class="nav-item" href="#experiments"><span class="nav-icon">⌬</span>Experiments</a>
-          <a class="nav-item" href="#data"><span class="nav-icon">▤</span>Data explorer</a>
         </nav>
         <div class="sidebar-bottom">
           <div class="environment-card"><div class="env-top"><span class="env-pulse"></span>DEMO ENVIRONMENT</div><p>Simulated service desk data</p><span class="env-note">No production systems connected</span></div>
-          <a class="nav-item" href="#settings"><span class="nav-icon">⚙</span>Settings</a>
-          <div class="profile"><div class="avatar">JD</div><span><strong>Jordan Davis</strong><small>Support engineer</small></span><button class="more-button" aria-label="Account menu">···</button></div>
+          <div class="profile"><div class="avatar" aria-hidden="true">US</div><span><strong>The Usual Suspects</strong><small>Local demo workspace</small></span></div>
         </div>
       </aside>
+      <button class="mobile-nav-backdrop" id="mobile-nav-backdrop" aria-label="Close navigation" hidden></button>
 
       <main class="main-content">
         <header class="topbar">
-          <div class="breadcrumbs"><span>Workspace</span><b>/</b><strong>Problem review</strong></div>
-          <div class="topbar-actions"><span class="dataset-chip" id="source-state"><span></span>SAMPLE PREVIEW</span><button class="icon-button" aria-label="Help">?</button><button class="icon-button notification" aria-label="Notifications">♧<i></i></button><div class="top-avatar">JD</div></div>
+          <div class="topbar-leading"><button class="mobile-menu-button" id="mobile-menu-button" aria-label="Open navigation" aria-expanded="false" aria-controls="main-navigation">☰</button><div class="breadcrumbs"><span>The Usual Suspects</span><b>/</b><strong>Problem review</strong></div></div>
+          <div class="topbar-actions"><span class="dataset-chip" id="source-state"><span></span>SAMPLE PREVIEW</span></div>
         </header>
         <section class="page-wrap" id="clusters">
           <div class="page-heading">
@@ -70,21 +66,21 @@ Output: The page elements consumed and updated by web/app.js.
               <div class="panel-heading"><div><div class="panel-title-row"><h2>Candidate clusters</h2><span class="count-pill" data-summary="cluster_count">0</span></div><p>Ranked by recurrence and supporting signals</p></div><button class="text-button" id="view-all">View all <span>→</span></button></div>
               <div class="filter-row"><label class="search-box"><span>⌕</span><input id="search-input" type="search" placeholder="Search clusters or systems" aria-label="Search clusters or systems"><kbd>⌘ K</kbd></label><label class="select-wrap"><span class="sr-only">Filter by status</span><select id="status-filter"><option value="all">All statuses</option><option value="needs_review">Needs review</option><option value="proposed">Proposed</option><option value="approved">Approved</option><option value="dismissed">Dismissed</option></select><span class="select-caret">⌄</span></label><button class="filter-button" id="sort-button" title="Sort by incident count">⇅ <span>Sort</span></button></div>
               <div class="cluster-table-wrap"><table class="cluster-table"><thead><tr><th>CLUSTER</th><th>INCIDENTS</th><th>FIRST SEEN</th><th>CONFIDENCE</th><th>STATUS</th><th><span class="sr-only">Open details</span></th></tr></thead><tbody id="cluster-rows"></tbody></table><div class="empty-state" id="empty-state" hidden>No clusters match your search.</div></div>
-              <div class="table-footer"><span>Showing <strong id="visible-count">0</strong> clusters</span><div class="pagination"><button disabled aria-label="Previous page">←</button><button class="page-current" aria-label="Page 1">1</button><button disabled aria-label="Next page">→</button></div></div>
+              <div class="table-footer"><span>Showing <strong id="visible-count">0</strong> clusters</span></div>
             </article>
 
             <aside class="panel detail-panel" aria-live="polite">
-              <div class="detail-header"><div><div class="detail-kicker"><span class="severity-dot"></span><span id="detail-id">CLUSTER CL-2048</span><span class="detail-separator">·</span><span id="detail-state">NEEDS REVIEW</span></div><h2 id="detail-title">Authentication timeouts</h2></div><button class="detail-menu" aria-label="More cluster actions">···</button></div>
+              <div class="detail-header"><div><div class="detail-kicker"><span class="severity-dot"></span><span id="detail-id">CLUSTER CL-2048</span><span class="detail-separator">·</span><span id="detail-state">NEEDS REVIEW</span></div><h2 id="detail-title">Authentication timeouts</h2></div></div>
               <div class="detail-meta"><span>◷ &nbsp;<span id="detail-time">First seen 09:14 today</span></span><span>⊙ &nbsp;<span id="detail-count">142 incidents</span></span></div>
               <div class="system-row" id="detail-systems"><span class="system-tag">Auth Gateway</span><span class="system-tag">Identity API</span><span class="system-tag muted-tag">+1</span></div>
               <div class="mini-chart"><div class="chart-labels"><span>INCIDENT TIMELINE</span><span>CLUSTER VOLUME <span class="chart-legend"><i></i> Tickets</span></span></div><div class="chart-area"><div class="chart-y"><span id="chart-max">—</span><span id="chart-mid">—</span><span>0</span></div><div class="chart-plot"><div class="gridline g1"></div><div class="gridline g2"></div><div class="gridline g3"></div><div class="change-marker" id="change-marker" hidden><span id="change-label">CHANGE</span></div><svg viewBox="0 0 440 108" preserveAspectRatio="none" role="img" aria-label="Incident counts across the selected cluster timeline"><defs><linearGradient id="fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#55d4bd" stop-opacity=".28"/><stop offset="1" stop-color="#55d4bd" stop-opacity="0"/></linearGradient></defs><path class="area-path" id="volume-area" d=""/><path class="line-path" id="volume-line" d=""/></svg><div class="chart-x"><span id="chart-start">—</span><span id="chart-mid-time">—</span><span id="chart-end">—</span></div></div></div></div>
               <div class="cause-heading"><div><h3>Ranked root causes</h3><span>Heuristic scores · not calibrated probabilities</span></div><span class="model-chip">BASELINE</span></div>
               <div class="cause-list" id="cause-list"></div>
               <div class="incident-sample"><span>INCIDENT SAMPLE</span><p id="incident-sample">Loading pipeline data…</p></div>
-              <div class="detail-footer"><span class="review-note"><span class="review-avatar">JD</span>Review before creating a problem</span><button class="button button-approve" id="propose-button"><span>＋</span> Propose problem</button></div>
+              <div class="detail-footer"><span class="review-note"><span class="review-avatar" aria-hidden="true">✓</span>Human review required</span><button class="button button-approve" id="propose-button"><span>＋</span> Propose problem</button></div>
             </aside>
           </section>
-          <footer class="page-footer"><span><span class="footer-shield">◇</span> &nbsp;Synthetic data only · human review required</span><span id="analysis-updated">No analysis loaded</span></footer>
+          <footer class="page-footer"><span><span class="footer-shield">◇</span> &nbsp;Synthetic data only · human review required · © <span id="copyright-year"></span> The Usual Suspects</span><span id="analysis-updated">No analysis loaded</span></footer>
         </section>
       </main>
     </div>
