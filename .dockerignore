@@ -1,0 +1,9 @@
+.git
+.venv
+node_modules
+web-components/node_modules
+data/generated
+data/analysis
+data/state
+*.sqlite3
+__pycache__

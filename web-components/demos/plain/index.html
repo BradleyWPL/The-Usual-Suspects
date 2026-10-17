@@ -1,0 +1,6 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>IncidentLens · Plain HTML components</title><link rel="stylesheet" href="./demo.css"><script type="module" src="./main.ts"></script></head>
+<body><main><p class="eyebrow">INCIDENTLENS WEB COMPONENTS</p><h1>Plain HTML demo</h1><p class="intro">The same Lit custom elements work without a framework.</p>
+  <div class="grid"><lens-cluster-card cluster-id="CL-001" title="Identity requests timing out" count="128" status="Needs review"><p>Seen across the identity gateway and directory service.</p></lens-cluster-card>
+  <lens-noise-meter id="noise"></lens-noise-meter><lens-incident-timeline id="timeline"></lens-incident-timeline><lens-dependency-graph id="dependencies"></lens-dependency-graph><lens-evidence-list id="evidence"></lens-evidence-list><lens-proposal-form cluster-id="CL-001" candidate="Identity connection pool exhaustion"></lens-proposal-form></div>
+  <p id="result" role="status">Proposal has not been submitted.</p></main></body></html>

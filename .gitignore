@@ -11,11 +11,16 @@ mlruns/
 !.env.example
 data/generated/
 data/analysis/
+data/splits/
+data/experiments/
+logs/
 *.sqlite3
 
 # Web tooling
 node_modules/
 web/dist/
+web-components/node_modules/
+web-components/dist/
 
 # OS and editor files
 .DS_Store

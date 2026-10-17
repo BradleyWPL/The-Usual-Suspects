@@ -1,0 +1,3 @@
+# Install with crontab -e after setting DATABASE_URL in the service account environment.
+# Runs the deterministic synthetic demo refresh nightly at 02:15 UTC.
+15 2 * * * /path/to/The-Usual-Suspects/ops/run-nightly.sh

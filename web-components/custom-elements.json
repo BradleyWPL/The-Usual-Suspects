@@ -1,0 +1,194 @@
+{
+  "schemaVersion": "1.0.0",
+  "readme": "README.md",
+  "modules": [
+    {
+      "kind": "javascript-module",
+      "path": "src/index.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "name": "LensClusterCard",
+          "tagName": "lens-cluster-card",
+          "customElement": true,
+          "description": "IncidentLens lens cluster card component.",
+          "superclass": {
+            "name": "LitElement",
+            "package": "lit"
+          },
+          "members": [
+            {
+              "kind": "field",
+              "name": "title",
+              "type": {
+                "text": "string"
+              },
+              "privacy": "public"
+            },
+            {
+              "kind": "field",
+              "name": "clusterId",
+              "type": {
+                "text": "string"
+              },
+              "privacy": "public"
+            },
+            {
+              "kind": "field",
+              "name": "count",
+              "type": {
+                "text": "number"
+              },
+              "privacy": "public"
+            },
+            {
+              "kind": "field",
+              "name": "status",
+              "type": {
+                "text": "string"
+              },
+              "privacy": "public"
+            }
+          ]
+        },
+        {
+          "kind": "class",
+          "name": "LensEvidenceList",
+          "tagName": "lens-evidence-list",
+          "customElement": true,
+          "description": "IncidentLens lens evidence list component.",
+          "superclass": {
+            "name": "LitElement",
+            "package": "lit"
+          },
+          "members": [
+            {
+              "kind": "field",
+              "name": "causes",
+              "type": {
+                "text": "Array<CauseEvidence>"
+              },
+              "privacy": "public"
+            }
+          ]
+        },
+        {
+          "kind": "class",
+          "name": "LensNoiseMeter",
+          "tagName": "lens-noise-meter",
+          "customElement": true,
+          "description": "IncidentLens lens noise meter component.",
+          "superclass": {
+            "name": "LitElement",
+            "package": "lit"
+          },
+          "members": [
+            {
+              "kind": "field",
+              "name": "total",
+              "type": {
+                "text": "number"
+              },
+              "privacy": "public"
+            },
+            {
+              "kind": "field",
+              "name": "clustered",
+              "type": {
+                "text": "number"
+              },
+              "privacy": "public"
+            }
+          ]
+        },
+        {
+          "kind": "class",
+          "name": "LensIncidentTimeline",
+          "tagName": "lens-incident-timeline",
+          "customElement": true,
+          "description": "IncidentLens lens incident timeline component.",
+          "superclass": {
+            "name": "LitElement",
+            "package": "lit"
+          },
+          "members": [
+            {
+              "kind": "field",
+              "name": "points",
+              "type": {
+                "text": "Array<TimelinePoint>"
+              },
+              "privacy": "public"
+            },
+            {
+              "kind": "field",
+              "name": "changeHour",
+              "type": {
+                "text": "string"
+              },
+              "privacy": "public"
+            }
+          ]
+        },
+        {
+          "kind": "class",
+          "name": "LensDependencyGraph",
+          "tagName": "lens-dependency-graph",
+          "customElement": true,
+          "description": "IncidentLens lens dependency graph component.",
+          "superclass": {
+            "name": "LitElement",
+            "package": "lit"
+          },
+          "members": [
+            {
+              "kind": "field",
+              "name": "nodes",
+              "type": {
+                "text": "Array"
+              },
+              "privacy": "public"
+            },
+            {
+              "kind": "field",
+              "name": "edges",
+              "type": {
+                "text": "Array"
+              },
+              "privacy": "public"
+            }
+          ]
+        },
+        {
+          "kind": "class",
+          "name": "LensProposalForm",
+          "tagName": "lens-proposal-form",
+          "customElement": true,
+          "description": "IncidentLens lens proposal form component.",
+          "superclass": {
+            "name": "LitElement",
+            "package": "lit"
+          },
+          "members": [
+            {
+              "kind": "field",
+              "name": "clusterId",
+              "type": {
+                "text": "string"
+              },
+              "privacy": "public"
+            },
+            {
+              "kind": "field",
+              "name": "candidate",
+              "type": {
+                "text": "string"
+              },
+              "privacy": "public"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

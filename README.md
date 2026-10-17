@@ -2,63 +2,124 @@
 
 IncidentLens turns noisy, recurring IT incidents into candidate problem records and ranks likely root causes using change and dependency evidence. A support engineer reviews every proposal before it becomes a problem record.
 
-This repository now has the first end-to-end data foundation: a deterministic simulator, isolated evaluation labels, a PostgreSQL schema, a sparse TF-IDF clustering baseline, and a transparent evidence ranker. The review dashboard is a separate UI prototype and is not connected to the pipeline yet. All generated incidents are fictional; no real data, measured benchmark, API, or trained model is included.
+All records are generated synthetic data. No real employee, patient, company, or production-system data is used. Ranking scores are heuristic evidence scores, not probabilities.
 
-## Run the dashboard
+## Run the review app (Windows)
 
-Open `web/index.html` in a browser, or serve the web folder locally:
+From PowerShell in the repository folder:
 
-```bash
-python3 -m http.server 8000 --directory web
-```
+\`\`\`powershell
+.\\run.ps1 -Install
+\`\`\`
 
-Then visit `http://localhost:8000`. The demo includes cluster search and filtering, selectable cluster evidence, a proposal interaction, and CSV export. Proposal state lives only in the page session.
+The first run installs the locked API dependencies, generates the quick synthetic dataset, runs baseline analysis and a temporal holdout evaluation, then starts the app at <http://127.0.0.1:8000>. Keep that PowerShell window open. Stop the server with **Ctrl+C**. If a static server is already using port 8000, stop it before starting this app.
 
-## Generate and analyze incidents
+For manual setup:
 
-Run from the repository root with Python 3.11 or later. The first workflow uses only the Python standard library:
+\`\`\`powershell
+py -3 -m venv --without-pip .venv
+py -3 -m pip --python .venv\\Scripts\\python.exe install -r requirements.lock.txt
+py -3 data\\generate.py --profile quick
+py -3 pipelines\\analyze.py
+py -3 -m uvicorn api.main:app --host 127.0.0.1 --port 8000
+\`\`\`
 
-```bash
-python data/generate.py
-python pipelines/analyze.py
-python data/evaluate.py
-```
+The UI reads actual cluster assignments, ranked evidence, incident samples, and hourly volume from the API. It saves proposal status in PostgreSQL when DATABASE_URL is set; otherwise it uses a local SQLite file under data/state/. The sample preview is labeled when pipeline data is not available.
 
-The generator defaults to 2,610 incidents across 12 recurring causes and 450 one-off reports. Pass `--incidents-per-cause` and `--noise-count` to change the scale. It writes CSV files under `data/generated/`; the answer key is kept separate from the analysis inputs and generated files are ignored by Git. The pipeline writes cluster assignments and ranked proposals under `data/analysis/`. The evaluator reports clustering and ranking metrics only for incidents with known simulated causes and warns that results describe the simulator, not real help desks.
+## Data and analysis workflow
 
-`data/schema.sql` defines the PostgreSQL tables and starter views. Database loading and the API are not implemented yet.
+The quick profile creates 3,150 incidents across 15 candidate causes and one-off requests. It is intended for the local UI workflow. To meet the guide's 30,000 row development size, run:
 
-## First baseline run
+\`\`\`powershell
+py -3 data\\generate.py --profile benchmark
+py -3 pipelines\\analyze.py
+py -3 data\\evaluate.py
+py -3 data\\realism_report.py --output data\\analysis\\realism_report.json
+\`\`\`
 
-The default deterministic dataset produced 2,610 simulated incidents (2,160 across 12 known causes and 450 one-offs). With a 0.36 cosine threshold and minimum cluster size of 4, the baseline formed 67 clusters and left 399 tickets as noise. The evaluator reported ARI 0.3391, non-noise purity 1.0000, top-1 cause accuracy 0.8421, top-3 cause accuracy 0.8421, and a 38.955 input-to-cluster reduction ratio.
+The realism report summarizes weekday/hour, priority, category, and resolution-time distributions and prints a deterministic 50-ticket sample for a human to review. Automatic distributions do not prove the language sounds realistic; read the sample before making that claim.
 
-These are real measurements from this simulator run, but they are not evidence of real help-desk performance. The low ARI and many small pure clusters show that this first baseline over-splits recurring causes; the apparent purity and ranking accuracy should be read alongside that limitation. Regenerate the data and rerun the three commands above to reproduce the run.
+The answer key is written to data/generated/true_causes.csv. pipelines/analyze.py never reads it. The evaluator reads it separately after inference. To create a chronological holdout and evaluate the later incidents independently:
 
-## Current scope
+\`\`\`powershell
+py -3 data\\split_temporal.py
+py -3 pipelines\\analyze.py --data data\\splits\\test\\features --output data\\analysis\\holdout
+py -3 data\\evaluate.py --data data\\splits\\test\\features --truth data\\splits\\evaluation\\test_true_causes.csv --analysis data\\analysis\\holdout
+\`\`\`
 
-- Polished responsive problem review screen with simulated incident clusters.
-- Deterministic synthetic data generator with noisy text, related and unrelated changes, dependencies, recurring causes, one-offs, and an isolated answer key.
-- Text normalization, sparse TF-IDF word and phrase features, service-aware cosine similarity components, and a configurable noise threshold.
-- Transparent root cause candidate ranking with change timing and dependency evidence.
-- Separate evaluator for adjusted Rand index, purity, noise reduction, and top-1/top-3 cause accuracy.
-- PostgreSQL schema for incidents, systems, dependencies, changes, clusters, proposals, and evaluation labels.
-- Cluster list, confidence and status filters, root cause evidence, and an incident volume view.
-- Keyboard accessible cluster selection and `Ctrl/Cmd+K` search shortcut.
-- CSV export of the visible sample dataset.
-- UI explicitly labels its simulated data and lack of a live system connection.
+The baseline uses normalized text and sparse TF-IDF word/phrase vectors to form same-system similarity components. It then ranks recent changes and shared upstream dependencies. The method stays inspectable and provides the comparison point for later experiments.
 
-## Planned build
+## PostgreSQL
 
-The next phases are PostgreSQL loading and query views, a FastAPI service, and reusable Lit components that read the real analysis output. Then add baseline tuning, embedding and HDBSCAN comparisons, held-out cause ranking, the two distinct model experiments, Spark scale comparisons, and containerized operations. See the supplied project guide for the full phased plan and quality checks.
+data/schema.sql defines incidents, systems, dependencies, changes, clustering runs, proposals, review notes, and the isolated evaluation answer key. It also defines query views for hourly and daily volume, changes near tickets, repeat requesters, priority/state counts, cluster sizes, proposal review, and named dependency edges.
 
-## Data and evaluation integrity
+The reproducible local stack starts PostgreSQL 18 and the app together:
 
-All dashboard content is fabricated for the prototype. Keep `true_causes` separate from every model input. Do not use real patient, employee, or company incident data. Add quality metrics only after running the corresponding pipeline on a held-out evaluation set; never present placeholder values as measured results.
+\`\`\`powershell
+docker compose up --build
+\`\`\`
+
+Open <http://localhost:8000>. Docker generates the quick dataset, analyzes it, loads the records into PostgreSQL, and starts the API. The local demo database credentials are for development only. To load data into another PostgreSQL instance, set DATABASE_URL and run py -3 data/load_postgres.py after generation and analysis.
+
+## API
+
+- GET /api/health — service and data readiness.
+- GET /api/dashboard — current summary and cluster list.
+- GET /api/clusters?q=&status=&sort=&offset=&limit= — searchable, filterable list.
+- GET /api/clusters/{cluster_id} — ranked evidence, timeline, related change, and incident sample.
+- POST /api/clusters/{cluster_id}/review — save needs_review, proposed, approved, or dismissed state and reviewer note.
+- GET /api/volume — hourly synthetic volume.
+- GET /docs — interactive API documentation.
+
+Proposal actions record review state only. They do not close incidents or apply a fix.
+
+## Reusable Lit components
+
+web-components/ contains typed Lit custom elements for cluster cards, evidence lists, noise reduction, incident timelines, dependency graphs, and proposal review. The same elements are shown in a plain HTML page and a React page.
+
+\`\`\`powershell
+cd web-components
+npm ci
+npm run manifest
+npm run build
+npm run dev
+\`\`\`
+
+Vite serves the demos from the printed local address. The built examples are demos/plain/ and demos/react/; custom-elements.json is the checked-in Custom Elements Manifest.
+
+## Optional model and scale experiments
+
+Embedding/HDBSCAN comparison, PyTorch encoder fine-tuning, TensorFlow spike detection, and the PySpark scale benchmark are separate from the quick app environment. Use the commands and environment separation in docs/experiments.md. Their optional results are not presented as measured until the corresponding command has run on this machine.
+
+## Current measured baseline
+
+These reproducible results were generated with the quick profile, TF-IDF threshold 0.36, and minimum cluster size 4:
+
+| Scope | Incidents | ARI | Non-noise purity | Top-1 / Top-3 cause accuracy | Noise incidents | Noise fraction | Read carefully |
+|---|---:|---:|---:|---:|---:|---:|---|
+| Full quick dataset | 3,150 | 0.6323 | 0.9611 | 0.8462 / 0.8718 | 403 | 12.79% | Ranking scored on 39 pure clusters; 49 candidate groups total. |
+| Chronological final 20% | 630 | 0.4763 | 0.7547 | 0.8750 / 1.0000 | 47 | 7.46% | Only 8 pure clusters scored; small synthetic holdout, so the rank accuracies are noisy. |
+| Full 30,000 benchmark | 30,000 | 0.9326 | 0.9333 | 0.8462 / 0.8462 | 2 | 0.01% | Ranking scored on 13 pure clusters; 14 candidate groups total. |
+
+The quick profile contains 15 known causes plus 450 one-off requests. The benchmark profile contains 30,000 incidents. Noise fraction is the share of input tickets the clusterer labels as noise; one-off requests are included. Metrics describe only this simulator and are not claims about real service-desk performance. Interpret purity and ranking accuracy together with ARI, noise, cluster count, and holdout size.
+
+## Data integrity and limitations
+
+- Do not use real patient, employee, or company incident data.
+- Keep true_causes.csv outside every feature query and model input.
+- Report measured results with dataset size, split, method, settings, and simulator caveat.
+- No model score is a calibrated probability.
+- Human review remains required before creating a problem record.
+- The local API is for development and portfolio demonstration, not production deployment.
 
 ## Repository map
 
-```text
-web/       Responsive review dashboard prototype
-docs/      Architecture notes and project decisions
-data/      Reserved for the synthetic generator and SQL schema
-```
+\`\`\`text
+api/             FastAPI service and local review-state storage
+data/            Synthetic data, PostgreSQL schema/loader, evaluation
+pipelines/       TF-IDF baseline and optional embedding/HDBSCAN comparison
+web/             Incident review dashboard
+web-components/  Lit custom elements with plain HTML and React demos
+ops/             Nightly Linux job example
+docs/            Architecture and decision notes
+\`\`\`

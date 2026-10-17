@@ -1,0 +1,3 @@
+-r requirements-embedding.txt
+datasets>=4,<5
+mlflow>=3,<4

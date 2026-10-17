@@ -6,11 +6,13 @@ import csv
 import json
 import math
 import re
+import uuid
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
 STOP_WORDS = {"the", "and", "for", "with", "after", "before", "from", "this", "that", "have", "has", "are", "was", "were", "into", "onto", "please", "help", "again", "since", "when", "then", "your", "our", "getting", "keeps", "keep", "still", "reports", "request", "users", "user"}
+LABEL_FILLER = {"on", "morning", "afternoon", "evening", "today", "urgent", "alert", "monitor", "automated", "threshold", "exceeded", "seeing"}
 HOST_RE = re.compile(r"\b(?:[a-z0-9-]+\.)+(?:corp|local|internal|example)\b", re.I)
 TICKET_RE = re.compile(r"\b(?:INC|CHG|REQ|TASK)[-_ ]?\d{3,}\b", re.I)
 IP_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
@@ -138,6 +140,7 @@ def rank_causes(members: list[dict[str, str]], all_incidents: list[dict[str, str
     return ranked
 
 def analyze(data_dir: Path, output: Path, threshold: float = 0.28, min_size: int = 4) -> dict[str, object]:
+    started = datetime.now(timezone.utc)
     incidents = read_csv(data_dir / "incidents.csv")
     changes = read_csv(data_dir / "changes.csv")
     systems = read_csv(data_dir / "configuration_items.csv")
@@ -152,7 +155,7 @@ def analyze(data_dir: Path, output: Path, threshold: float = 0.28, min_size: int
         cluster_id = f"CL-{number:04d}"
         members = [incidents[index] for index in indices]
         labels = Counter(normalize(row["short_description"]) for row in members)
-        common_label = labels.most_common(1)[0][0][:64] or "Recurring incident pattern"
+        common_label = " ".join(token for token in labels.most_common(1)[0][0].split() if token not in LABEL_FILLER)[:64] or "Recurring incident pattern"
         cluster_rows.extend({"cluster_id": cluster_id, "incident_id": row["incident_id"], "label": common_label,
                              "opened_at": row["opened_at"], "ci_id": row["ci_id"]} for row in members)
         for candidate in rank_causes(members, incidents, changes, systems, edges, catalog):
@@ -164,8 +167,14 @@ def analyze(data_dir: Path, output: Path, threshold: float = 0.28, min_size: int
     with (output / "proposals.json").open("w", encoding="utf-8") as handle:
         json.dump(proposals, handle, indent=2)
     clustered = sum(len(group) for group in groups)
-    return {"incidents": len(incidents), "clusters": len(groups), "clustered_incidents": clustered,
-            "noise_incidents": len(incidents) - clustered, "proposals": len(proposals), "results_dir": str(output)}
+    result = {"run_id": f"baseline-{started.strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:6]}",
+              "method": "sparse_tfidf_connected_components", "threshold": threshold,
+              "min_cluster_size": min_size, "started_at": started.isoformat(),
+              "finished_at": datetime.now(timezone.utc).isoformat(), "incidents": len(incidents),
+              "clusters": len(groups), "clustered_incidents": clustered,
+              "noise_incidents": len(incidents) - clustered, "proposals": len(proposals)}
+    (output / "run.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
+    return {**result, "results_dir": str(output)}
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
