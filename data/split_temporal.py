@@ -27,12 +27,14 @@ FEATURE_FILES = (
 
 def read_csv(path: Path) -> list[dict[str, str]]:
     """Read a UTF-8 CSV file and return its rows as dictionaries."""
+    # Load without changing field values; callers own timestamp and ID interpretation.
     with path.open(newline="", encoding="utf-8") as handle:
         return list(csv.DictReader(handle))
 
 
 def write_csv(path: Path, rows: list[dict[str, str]], fieldnames: list[str]) -> None:
     """Write rows using a stable header, including when a split has no rows."""
+    # Create nested split folders before opening the destination file.
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
@@ -42,6 +44,7 @@ def write_csv(path: Path, rows: list[dict[str, str]], fieldnames: list[str]) -> 
 
 def parse_time(value: str) -> datetime:
     """Parse ISO timestamps, including UTC timestamps written with a Z suffix."""
+    # Python's ISO parser expects +00:00 in place of the common UTC Z suffix.
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
@@ -57,10 +60,12 @@ def split_temporally(
     if validation_fraction + test_fraction >= 1:
         raise ValueError("validation and test fractions must total less than 1")
 
+    # Sort chronologically before slicing so later records cannot enter training.
     incidents = sorted(read_csv(data_dir / "incidents.csv"), key=lambda row: row["opened_at"])
     if len(incidents) < 3:
         raise ValueError("at least three incidents are needed for three datasets")
 
+    # Convert requested fractions into adjacent, non-overlapping time-ordered partitions.
     total = len(incidents)
     train_end = max(1, int(total * (1 - validation_fraction - test_fraction)))
     validation_end = max(train_end + 1, int(total * (1 - test_fraction)))
@@ -73,6 +78,7 @@ def split_temporally(
     if any(not rows for rows in partitions.values()):
         raise ValueError("each split must contain at least one incident")
 
+    # Build lookup tables once to keep each output split's label selection straightforward.
     source_changes = read_csv(data_dir / "changes.csv")
     source_labels = read_csv(data_dir / "true_causes.csv")
     labels_by_id = {row["incident_id"]: row for row in source_labels}
@@ -84,6 +90,7 @@ def split_temporally(
     file_headers["changes.csv"] = list(source_changes[0]) if source_changes else ["change_id"]
     label_headers = list(source_labels[0]) if source_labels else ["incident_id", "cause_id"]
 
+    # Write feature tables into split-specific folders and answer keys separately.
     split_details: dict[str, dict[str, object]] = {}
     for name, rows in partitions.items():
         start, end = parse_time(rows[0]["opened_at"]), parse_time(rows[-1]["opened_at"])
@@ -119,6 +126,7 @@ def split_temporally(
             "end_utc": end.astimezone(timezone.utc).isoformat(),
         }
 
+    # Store boundaries/counts to make the split reproducible and easy to inspect.
     manifest: dict[str, object] = {
         "method": "chronological_train_validation_test_split",
         "validation_fraction": validation_fraction,
@@ -135,6 +143,7 @@ def split_temporally(
 
 def main() -> None:
     """Parse split settings and write the requested three datasets."""
+    # Keep CLI validation and file-writing details out of the reusable split function.
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data", type=Path, default=ROOT / "data" / "generated")
     parser.add_argument("--output", type=Path, default=ROOT / "data" / "splits")

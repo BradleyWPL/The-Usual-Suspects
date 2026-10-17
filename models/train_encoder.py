@@ -19,11 +19,13 @@ SEED=20261016
 
 def read(path:Path)->list[dict[str,str]]:
     """Read a UTF-8 CSV file into dictionaries."""
+    # DictReader preserves the source header names for downstream ID joins.
     with path.open(newline="",encoding="utf-8") as f:return list(csv.DictReader(f))
 
 def write(path:Path,rows:list[dict[str,str]])->None:
     """Write row dictionaries to a CSV file, creating the parent directory first."""
     if not rows:return
+    # Empty outputs have no inferable columns, so leave them unwritten here.
     path.parent.mkdir(parents=True,exist_ok=True)
     with path.open("w",newline="",encoding="utf-8") as f:
         writer=csv.DictWriter(f,fieldnames=list(rows[0]));writer.writeheader();writer.writerows(rows)
@@ -40,14 +42,17 @@ def main()->None:
     parser.add_argument("--pairs-per-cause",type=int,default=120)
     parser.add_argument("--holdout-fraction",type=float,default=.2)
     args=parser.parse_args()
+    # Reject invalid options before reading data or importing the heavier training stack.
     if args.epochs<=0 or args.pairs_per_cause<1 or not 0<args.holdout_fraction<.5:parser.error("invalid training settings")
 
+    # Match only training partition records to the isolated training answer key.
     incidents=read(args.data/"incidents.csv")
     labels={row["incident_id"]:row["cause_id"] for row in read(args.truth)}
     groups:dict[str,list[dict[str,str]]]=defaultdict(list)
     for incident in incidents:
         cause=labels.get(incident["incident_id"])
         if cause:groups[cause].append(incident)
+    # Hold out whole causes, preventing paraphrases of the same cause from leaking across evaluation.
     causes=sorted(groups);rng=random.Random(SEED);rng.shuffle(causes)
     holdout_count=max(1,round(len(causes)*args.holdout_fraction))
     heldout_causes=set(causes[:holdout_count]);training_causes=set(causes[holdout_count:])
@@ -55,6 +60,7 @@ def main()->None:
     heldout_rows=[row for cause in heldout_causes for row in groups[cause]]
     training_groups={cause:groups[cause] for cause in training_causes}
 
+    # Positive pairs share a cause; negative pairs are drawn from different training causes.
     pairs=[]
     for cause,members in training_groups.items():
         if len(members)<2:continue
@@ -67,6 +73,7 @@ def main()->None:
         pairs.append((a["short_description"],b["short_description"],0.1))
     rng.shuffle(pairs)
 
+    # Load the optional training framework only after validating inputs and preparing pairs.
     from datasets import Dataset
     from sentence_transformers import SentenceTransformer,SentenceTransformerTrainer,SentenceTransformerTrainingArguments,losses
     model=SentenceTransformer(args.base_model,device="cpu")
@@ -74,12 +81,14 @@ def main()->None:
     trainer_args=SentenceTransformerTrainingArguments(output_dir=str(args.output/"trainer"),num_train_epochs=args.epochs,
         per_device_train_batch_size=32,learning_rate=2e-5,warmup_ratio=.1,logging_steps=50,
         save_strategy="no",report_to="none",seed=SEED)
+    # CoSENT learns relative similarity from the synthetic positive and negative scores.
     trainer=SentenceTransformerTrainer(model=model,args=trainer_args,train_dataset=dataset,loss=losses.CoSENTLoss(model))
     args.output.mkdir(parents=True,exist_ok=True)
     trainer.train()
     model_dir=args.output/"fine-tuned-model"
     model.save(str(model_dir))
 
+    # Save held-out features separately from their labels so scoring cannot leak answers into training.
     feature_dir=args.output/"heldout"/"features"
     write(feature_dir/"incidents.csv",heldout_rows)
     for filename in ("configuration_items.csv","ci_dependencies.csv","cause_catalog.csv","changes.csv"):
@@ -88,6 +97,7 @@ def main()->None:
     write(args.output/"training"/"incidents.csv",training_rows)
     write(args.output/"training"/"true_causes.csv",[row for row in read(args.truth) if row["cause_id"] in training_causes])
 
+    # Record the split, model path, and pair counts needed to reproduce this experiment.
     metadata={"base_model":args.base_model,"fine_tuned_model":str(model_dir),"seed":SEED,"epochs":args.epochs,
               "positive_negative_pair_count":len(pairs),"training_cause_count":len(training_causes),
               "heldout_cause_ids":sorted(heldout_causes),"heldout_incident_count":len(heldout_rows),

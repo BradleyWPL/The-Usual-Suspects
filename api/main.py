@@ -39,6 +39,7 @@ class ReviewUpdate(BaseModel):
 
 def read_csv(path: Path) -> list[dict[str, str]]:
     """Read an existing UTF-8 CSV file or return an empty list when it is missing."""
+    # Missing generated files are treated as empty data so the API can start before setup.
     if not path.exists():
         return []
     with path.open(newline="", encoding="utf-8") as handle:
@@ -47,18 +48,21 @@ def read_csv(path: Path) -> list[dict[str, str]]:
 
 def data_ready() -> bool:
     """Check that the dashboard input and baseline output files are available."""
+    # Require the smallest complete input/output set needed by the main dashboard routes.
     required = [DATA_DIR / "incidents.csv", DATA_DIR / "configuration_items.csv", ANALYSIS_DIR / "clusters.csv", ANALYSIS_DIR / "proposals.json"]
     return all(path.is_file() for path in required)
 
 
 def load_reviews() -> dict[str, dict[str, str]]:
     """Load the latest proposal review state from PostgreSQL or local SQLite."""
+    # Prefer PostgreSQL when configured; the local demo otherwise uses SQLite.
     if DATABASE_URL:
         with psycopg.connect(DATABASE_URL) as connection:
             rows = connection.execute("""SELECT DISTINCT ON (p.cluster_id) p.cluster_id,p.status,COALESCE(r.note,''),COALESCE(r.updated_at,p.created_at)::text
                 FROM problem_proposals p LEFT JOIN proposal_reviews r USING (proposal_id)
                 ORDER BY p.cluster_id,p.run_id DESC,p.rank""").fetchall()
         return {row[0]: {"status": row[1], "note": row[2], "updated_at": row[3]} for row in rows}
+    # Avoid creating a local state database just because a read-only request arrived.
     if not STATE_DB.exists():
         return {}
     with sqlite3.connect(STATE_DB) as connection:
@@ -69,8 +73,10 @@ def load_reviews() -> dict[str, dict[str, str]]:
 
 def persist_review(cluster_id: str, status: str, note: str = "") -> dict[str, str]:
     """Save a reviewer status and note in the configured review-state database."""
+    # Timestamp the review once so both supported storage paths return the same payload.
     STATE_DB.parent.mkdir(parents=True, exist_ok=True)
     updated_at = datetime.now(timezone.utc).isoformat()
+    # Associate review state with the latest matching PostgreSQL proposal when possible.
     if DATABASE_URL:
         with psycopg.connect(DATABASE_URL) as connection:
             selected = connection.execute("SELECT proposal_id,run_id FROM problem_proposals WHERE cluster_id=%s ORDER BY run_id DESC,rank LIMIT 1", (cluster_id,)).fetchone()
@@ -79,6 +85,7 @@ def persist_review(cluster_id: str, status: str, note: str = "") -> dict[str, st
                 connection.execute("UPDATE problem_proposals SET status=%s WHERE cluster_id=%s AND run_id=%s",(status,cluster_id,run_id))
                 connection.execute("INSERT INTO proposal_reviews(proposal_id,note,updated_at) VALUES(%s,%s,%s) ON CONFLICT(proposal_id) DO UPDATE SET note=excluded.note,updated_at=excluded.updated_at",(proposal_id,note,updated_at))
                 return {"status": status, "note": note, "updated_at": updated_at}
+    # Use a cluster-keyed upsert for the standalone local demo path.
     with sqlite3.connect(STATE_DB) as connection:
         connection.execute("CREATE TABLE IF NOT EXISTS reviews (cluster_id TEXT PRIMARY KEY, status TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL)")
         connection.execute("INSERT INTO reviews(cluster_id,status,note,updated_at) VALUES(?,?,?,?) ON CONFLICT(cluster_id) DO UPDATE SET status=excluded.status,note=excluded.note,updated_at=excluded.updated_at", (cluster_id, status, note, updated_at))
@@ -87,12 +94,14 @@ def persist_review(cluster_id: str, status: str, note: str = "") -> dict[str, st
 
 def build_clusters() -> list[dict[str, object]]:
     """Combine analysis assignments, incident features, cause rankings, and saved review state."""
+    # Do not assemble partial clusters when generated or analysis files are still missing.
     if not data_ready():
         return []
     incidents = read_csv(DATA_DIR / "incidents.csv")
     systems = {row["ci_id"]: row["name"] for row in read_csv(DATA_DIR / "configuration_items.csv")}
     assignments = read_csv(ANALYSIS_DIR / "clusters.csv")
     proposals = json.loads((ANALYSIS_DIR / "proposals.json").read_text(encoding="utf-8"))
+    # Index incident features once, then group matching assignments by cluster identifier.
     by_incident = {row["incident_id"]: row for row in incidents}
     by_cluster: dict[str, list[dict[str, str]]] = defaultdict(list)
     for row in assignments:
@@ -101,6 +110,7 @@ def build_clusters() -> list[dict[str, object]]:
     proposal_groups: dict[str, list[dict[str, object]]] = defaultdict(list)
     for item in proposals:
         proposal_groups[str(item["cluster_id"])].append(item)
+    # Merge model proposals and persisted reviewer decisions into the API response objects.
     reviews = load_reviews()
     result = []
     for cluster_id, members in by_cluster.items():
@@ -129,6 +139,7 @@ def build_clusters() -> list[dict[str, object]]:
 
 def cluster_counts(clusters: list[dict[str, object]]) -> dict[str, int]:
     """Count clusters by their current human-review status."""
+    # Return every valid workflow state, including zero-count states for stable UI rendering.
     counts = Counter(str(row["status"]) for row in clusters)
     return {"needs_review": counts["needs_review"], "proposed": counts["proposed"], "approved": counts["approved"], "dismissed": counts["dismissed"]}
 
@@ -136,14 +147,17 @@ def cluster_counts(clusters: list[dict[str, object]]) -> dict[str, int]:
 @app.get("/api/health")
 def health() -> dict[str, object]:
     """Report service and dataset readiness for health checks."""
+    # Paths make local setup issues diagnosable without returning incident contents.
     return {"status": "ok", "data_ready": data_ready(), "data_dir": str(DATA_DIR), "analysis_dir": str(ANALYSIS_DIR)}
 
 
 @app.get("/api/dashboard")
 def dashboard() -> dict[str, object]:
     """Return current incident, cluster, system, and review summary data."""
+    # The not-ready response lets the dashboard explain setup instead of showing an error.
     if not data_ready():
         return {"ready": False, "message": "Run the synthetic generator and analysis pipeline to populate the dashboard."}
+    # Aggregate counts and omit full incident arrays from the overview payload.
     clusters = build_clusters()
     incidents = read_csv(DATA_DIR / "incidents.csv")
     systems = read_csv(DATA_DIR / "configuration_items.csv")
@@ -167,6 +181,7 @@ def dashboard() -> dict[str, object]:
 def list_clusters(q: str = "", status: str = "all", sort: Literal["desc", "asc"] = "desc",
                   offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200)) -> dict[str, object]:
     """Search, filter, sort, and paginate candidate cluster summaries."""
+    # Filter before sorting and pagination so total describes the visible result set.
     clusters = build_clusters()
     if q.strip():
         query = q.casefold()
@@ -182,6 +197,7 @@ def list_clusters(q: str = "", status: str = "all", sort: Literal["desc", "asc"]
 @app.get("/api/clusters/{cluster_id}")
 def cluster_detail(cluster_id: str) -> dict[str, object]:
     """Return one cluster with its ranked causes, timeline, change marker, and incident sample."""
+    # Return an explicit 404 when the requested ID is no longer in the current analysis.
     row = next((item for item in build_clusters() if item["id"] == cluster_id), None)
     if row is None:
         raise HTTPException(404, "Cluster not found. Generate and analyze the synthetic dataset first.")
@@ -194,6 +210,7 @@ def cluster_detail(cluster_id: str) -> dict[str, object]:
     for opened in timestamps:
         index = min(11, int((opened - first).total_seconds() / span * 12))
         bins[index] += 1
+    # Map ranked change evidence to a position along the cluster's time span.
     change_ids = {str(item.get("change_id")) for item in row["causes"] if item.get("change_id")}
     matched_change = next((item for item in read_csv(DATA_DIR / "changes.csv") if item["change_id"] in change_ids), None)
     marker = None
@@ -209,6 +226,7 @@ def cluster_detail(cluster_id: str) -> dict[str, object]:
 @app.post("/api/clusters/{cluster_id}/review")
 def review_cluster(cluster_id: str, update: ReviewUpdate) -> dict[str, object]:
     """Validate and persist an authorized review status for an existing cluster."""
+    # Prevent stale clients from creating review records for unknown cluster IDs.
     exists = any(row["id"] == cluster_id for row in build_clusters())
     if not exists:
         raise HTTPException(404, "Cluster not found")
@@ -221,6 +239,7 @@ def incident_volume() -> list[dict[str, object]]:
     """Aggregate generated incidents into hourly volume counts."""
     if not data_ready():
         return []
+    # Floor every timestamp to its UTC hour and count incidents in that bucket.
     counts: Counter[str] = Counter()
     for row in read_csv(DATA_DIR / "incidents.csv"):
         hour = datetime.fromisoformat(row["opened_at"].replace("Z", "+00:00")).replace(minute=0, second=0, microsecond=0).isoformat()
@@ -231,6 +250,7 @@ def incident_volume() -> list[dict[str, object]]:
 @app.get("/")
 def index() -> FileResponse:
     """Serve the IncidentLens dashboard HTML page."""
+    # Return the SPA shell; the static mount below resolves scripts, styles, and assets.
     return FileResponse(WEB_DIR / "index.html")
 
 

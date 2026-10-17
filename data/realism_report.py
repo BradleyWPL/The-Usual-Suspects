@@ -22,12 +22,14 @@ SAMPLE_SEED = 20261017
 
 def read_csv(path: Path) -> list[dict[str, str]]:
     """Read a UTF-8 CSV file into dictionaries keyed by the header row."""
+    # Keep the report and worksheet tied to the same generated CSV source.
     with path.open(newline="", encoding="utf-8") as handle:
         return list(csv.DictReader(handle))
 
 
 def choose_sample(incidents: list[dict[str, str]], sample_size: int) -> list[dict[str, str]]:
     """Select a reproducible random sample without mutating the input rows."""
+    # A local seeded RNG gives the same review sample without changing global random state.
     if sample_size < 1:
         raise ValueError("sample size must be at least one")
     return random.Random(SAMPLE_SEED).sample(incidents, min(sample_size, len(incidents)))
@@ -35,6 +37,7 @@ def choose_sample(incidents: list[dict[str, str]], sample_size: int) -> list[dic
 
 def report(data_dir: Path, sample_size: int = 250) -> dict[str, object]:
     """Summarize data distributions and include sample tickets for manual review."""
+    # Compute automatic distribution checks and a separate manually reviewable sample.
     incidents = read_csv(data_dir / "incidents.csv")
     catalog = read_csv(data_dir / "cause_catalog.csv")
     weekdays: Counter[str] = Counter()
@@ -43,6 +46,7 @@ def report(data_dir: Path, sample_size: int = 250) -> dict[str, object]:
     categories: Counter[str] = Counter()
     resolution_minutes: list[float] = []
 
+    # Parse each record once to accumulate time, category, priority, and resolution summaries.
     for row in incidents:
         opened = datetime.fromisoformat(row["opened_at"].replace("Z", "+00:00"))
         weekdays[opened.strftime("%A")] += 1
@@ -53,6 +57,7 @@ def report(data_dir: Path, sample_size: int = 250) -> dict[str, object]:
             resolved = datetime.fromisoformat(row["resolved_at"].replace("Z", "+00:00"))
             resolution_minutes.append(max(0.0, (resolved - opened).total_seconds() / 60))
 
+    # Sort resolution values for a median and preserve sampled records for human inspection.
     sample = choose_sample(incidents, sample_size)
     resolution_minutes.sort()
     return {
@@ -84,6 +89,7 @@ def report(data_dir: Path, sample_size: int = 250) -> dict[str, object]:
 
 def write_review_worksheet(data_dir: Path, output_path: Path, sample_size: int) -> int:
     """Write a sampled ticket worksheet with blank fields for a human reviewer."""
+    # Reuse the deterministic sample function so worksheet and report samples agree.
     incidents = read_csv(data_dir / "incidents.csv")
     sample = choose_sample(incidents, sample_size)
     fieldnames = [
@@ -94,6 +100,7 @@ def write_review_worksheet(data_dir: Path, output_path: Path, sample_size: int) 
     with output_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
+        # Leave annotation cells empty; these columns are intended for a person to complete.
         for row in sample:
             writer.writerow({
                 "incident_id": row["incident_id"],
@@ -115,6 +122,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--worksheet", type=Path)
     args = parser.parse_args()
+    # Convert sample validation errors into standard CLI usage messages.
     try:
         result = report(args.data, args.sample_size)
         if args.worksheet:
@@ -124,6 +132,7 @@ def main() -> None:
     except ValueError as error:
         parser.error(str(error))
 
+    # Print the report and optionally save an identical copy to disk.
     rendered = json.dumps(result, indent=2)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

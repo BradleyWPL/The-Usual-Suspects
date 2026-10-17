@@ -27,6 +27,7 @@ TOKEN_RE = re.compile(r"[a-z][a-z0-9]{1,}")
 
 def normalize(text: str) -> str:
     """Lowercase and normalize ticket text while removing identifiers and template noise."""
+    # Remove hostnames and ticket-specific values before comparing incident language.
     text = HOST_RE.sub(" ", text.lower())
     text = TICKET_RE.sub(" ", text)
     text = IP_RE.sub(" ", text)
@@ -37,16 +38,19 @@ def normalize(text: str) -> str:
 
 def read_csv(path: Path) -> list[dict[str, str]]:
     """Read a UTF-8 CSV file into dictionaries."""
+    # Preserve source columns as named fields for the pipeline's joins.
     with path.open(newline="", encoding="utf-8") as handle:
         return list(csv.DictReader(handle))
 
 def parse_time(value: str) -> datetime:
     """Parse an ISO timestamp into a timezone-aware datetime."""
+    # Normalize Z timestamps and attach UTC when an input omitted its offset.
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 def vectorize(documents: list[str]) -> list[dict[str, float]]:
     """Create sparse TF-IDF word and phrase vectors for normalized descriptions."""
+    # Include adjacent word pairs so short phrases can distinguish similar tickets.
     features = []
     for document in documents:
         words = document.split()
@@ -64,22 +68,26 @@ def vectorize(documents: list[str]) -> list[dict[str, float]]:
             tf = 1.0 + math.log(count)
             idf = math.log((1 + total) / (1 + document_frequency[token])) + 1.0
             vector[token] = tf * idf
+        # Unit-normalize each sparse vector so the dot product is cosine similarity.
         norm = math.sqrt(sum(weight * weight for weight in vector.values())) or 1.0
         vectors.append({token: weight / norm for token, weight in vector.items()})
     return vectors
 
 def cluster(vectors: list[dict[str, float]], system_ids: list[str], threshold: float = 0.36, min_size: int = 4) -> list[list[int]]:
     """Build sparse cosine components, comparing incidents on the same system."""
+    # Disjoint-set union joins similar pairs without materializing a dense similarity matrix.
     parent = list(range(len(vectors)))
     size = [1] * len(vectors)
     def find(node: int) -> int:
         """Find the representative node for one component in the disjoint-set structure."""
+        # Path compression shortens future lookups in this component.
         while parent[node] != node:
             parent[node] = parent[parent[node]]
             node = parent[node]
         return node
     def union(left: int, right: int) -> None:
         """Join two component representatives in the disjoint-set structure."""
+        # Union by size keeps the disjoint-set trees shallow.
         a, b = find(left), find(right)
         if a == b:
             return
@@ -88,6 +96,7 @@ def cluster(vectors: list[dict[str, float]], system_ids: list[str], threshold: f
         parent[b] = a
         size[a] += size[b]
 
+    # Inverted postings limit comparisons to records sharing at least one token.
     postings: dict[str, list[int]] = defaultdict(list)
     for index, vector in enumerate(vectors):
         for token in vector:
@@ -105,6 +114,7 @@ def cluster(vectors: list[dict[str, float]], system_ids: list[str], threshold: f
             similarity = sum(weight * large.get(token, 0.0) for token, weight in small.items())
             if similarity >= threshold:
                 union(index, other)
+    # Gather final connected components, discarding components below the recurrence minimum.
     groups: dict[int, list[int]] = defaultdict(list)
     for index in range(len(vectors)):
         groups[find(index)].append(index)
@@ -114,6 +124,7 @@ def rank_causes(members: list[dict[str, str]], all_incidents: list[dict[str, str
                 systems: list[dict[str, str]], edges: list[dict[str, str]], catalog: list[dict[str, str]],
                 threshold_hours: float = 24.0) -> list[dict[str, object]]:
     """Rank catalog causes using recent changes and upstream-dependency evidence."""
+    # Establish the cluster's start and affected systems as the evidence search boundary.
     onset = min(parse_time(item["opened_at"]) for item in members)
     impacted = {item["ci_id"] for item in members}
     names = {row["ci_id"]: row["name"] for row in systems}
@@ -121,6 +132,7 @@ def rank_causes(members: list[dict[str, str]], all_incidents: list[dict[str, str
     upstream = {edge["parent_ci_id"] for edge in edges if edge["child_ci_id"] in impacted}
     shared_upstream = {ci for ci in upstream if all(any(e["parent_ci_id"] == ci and e["child_ci_id"] == affected for e in edges) for affected in impacted)}
     incident_words = set(" ".join(normalize(item["short_description"]) for item in members).split())
+    # Score only changes close to the cluster start and relevant to affected or upstream systems.
     candidates: dict[str, dict[str, object]] = {}
     for change in changes:
         changed_at = parse_time(change["applied_at"])
@@ -146,6 +158,7 @@ def rank_causes(members: list[dict[str, str]], all_incidents: list[dict[str, str
                 candidates[f"catalog:{item['cause_id']}"] = {"candidate_cause": item["candidate_cause"], "score": 0.15,
                     "evidence": ["No matching recent change was found; this is a low-confidence catalog hypothesis."],
                     "change_id": None, "ci_id": item["primary_ci_id"]}
+    # Keep the three strongest hypotheses and expose stable rounded scores and ranks.
     ranked = sorted(candidates.values(), key=lambda item: (-float(item["score"]), str(item["candidate_cause"])))[:3]
     for rank, item in enumerate(ranked, 1):
         item["rank"] = rank
@@ -154,12 +167,14 @@ def rank_causes(members: list[dict[str, str]], all_incidents: list[dict[str, str
 
 def analyze(data_dir: Path, output: Path, threshold: float = 0.28, min_size: int = 4) -> dict[str, object]:
     """Run feature-only normalization, clustering, evidence ranking, and output writing."""
+    # Capture start time and load feature data only; evaluation labels are intentionally absent.
     started = datetime.now(timezone.utc)
     incidents = read_csv(data_dir / "incidents.csv")
     changes = read_csv(data_dir / "changes.csv")
     systems = read_csv(data_dir / "configuration_items.csv")
     edges = read_csv(data_dir / "ci_dependencies.csv")
     catalog = read_csv(data_dir / "cause_catalog.csv")
+    # Transform descriptions, form recurring groups, and then create human-readable proposals.
     cleaned = [normalize(row["short_description"]) for row in incidents]
     vectors = vectorize(cleaned)
     groups = cluster(vectors, [row["ci_id"] for row in incidents], threshold, min_size)
@@ -174,12 +189,14 @@ def analyze(data_dir: Path, output: Path, threshold: float = 0.28, min_size: int
                              "opened_at": row["opened_at"], "ci_id": row["ci_id"]} for row in members)
         for candidate in rank_causes(members, incidents, changes, systems, edges, catalog):
             proposals.append({"cluster_id": cluster_id, "incident_count": len(members), **candidate})
+    # Persist assignments and proposals using the shared evaluator/API file contract.
     output.mkdir(parents=True, exist_ok=True)
     with (output / "clusters.csv").open("w", newline="", encoding="utf-8") as handle:
         fields = ["cluster_id", "incident_id", "label", "opened_at", "ci_id"]
         writer = csv.DictWriter(handle, fields); writer.writeheader(); writer.writerows(cluster_rows)
     with (output / "proposals.json").open("w", encoding="utf-8") as handle:
         json.dump(proposals, handle, indent=2)
+    # Record run settings and coverage so the output can be audited later.
     clustered = sum(len(group) for group in groups)
     result = {"run_id": f"baseline-{started.strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:6]}",
               "method": "sparse_tfidf_connected_components", "threshold": threshold,
@@ -192,6 +209,7 @@ def analyze(data_dir: Path, output: Path, threshold: float = 0.28, min_size: int
 
 def main() -> None:
     """Parse the analysis settings and execute the baseline pipeline."""
+    # Validate user-provided similarity settings before running the analysis.
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data", type=Path, default=Path(__file__).resolve().parents[1] / "data" / "generated")
     parser.add_argument("--output", type=Path, default=Path(__file__).resolve().parents[1] / "data" / "analysis")

@@ -26,10 +26,12 @@ def main()->None:
     parser.add_argument("--sizes",default="100000,1000000,2000000")
     parser.add_argument("--partitions",type=int,default=8)
     args=parser.parse_args()
+    # Keep heavy benchmark dependencies out of the normal application installation.
     import numpy as np
     import pandas as pd
     from pyspark.sql import SparkSession,functions as F,types as T
 
+    # Load only source columns required by the benchmark's grouped and joined operations.
     base=pd.read_csv(args.data/"incidents.csv",usecols=["incident_id","opened_at","short_description","ci_id"])
     changes=pd.read_csv(args.data/"changes.csv",usecols=["change_id","ci_id","applied_at"])
     spark=(SparkSession.builder.appName("IncidentLensScaleBenchmark").master("local[*]")
@@ -37,6 +39,7 @@ def main()->None:
            .config("spark.sql.session.timeZone","UTC")
            .config("spark.sql.execution.arrow.pyspark.enabled","true").getOrCreate())
     spark.sparkContext.setLogLevel("ERROR")
+    # Repeat source rows deterministically to simulate each requested volume.
     results=[]
     for n in (int(value.strip()) for value in args.sizes.split(",") if value.strip()):
         if n<1:raise SystemExit("row sizes must be positive")
@@ -47,6 +50,7 @@ def main()->None:
         frame["short_description"]=frame["short_description"].astype(str)+" "+frame["incident_id"]
         frame["opened_at"]=pd.to_datetime(frame["opened_at"],utc=True)+pd.to_timedelta(np.arange(n)%168,unit="h")
 
+        # Run the reference transformations in pandas and record their result counts.
         start=time.perf_counter()
         pandas_frame=frame.copy()
         pandas_frame["normalized"]=pandas_frame["short_description"].map(normalize)
@@ -58,6 +62,7 @@ def main()->None:
         pandas_change_hits=int(mask.sum())
         pandas_seconds=time.perf_counter()-start
 
+        # Mirror those transformations in Spark; compare counts and a fixed text sample.
         spark_start=time.perf_counter()
         spark_frame=spark.createDataFrame(frame).repartition(args.partitions)
         normalizer=F.udf(normalize,T.StringType())
@@ -72,6 +77,7 @@ def main()->None:
         sample_matches=[row[0] for row in sample]==pandas_frame.loc[:999,"normalized"].tolist()
         spark_seconds=time.perf_counter()-spark_start
         volume_matches=pandas_volume==spark_volume
+        # Record both timings and equivalence checks so speed is not reported without correctness.
         result={"rows":n,"pandas_seconds":round(pandas_seconds,3),"spark_seconds":round(spark_seconds,3),
                 "spark_over_pandas_speedup":round(pandas_seconds/spark_seconds,3) if spark_seconds else None,
                 "pandas_change_matches":pandas_change_hits,"spark_change_matches":spark_change_hits,

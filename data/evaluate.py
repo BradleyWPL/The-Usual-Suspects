@@ -16,11 +16,13 @@ from pathlib import Path
 
 def read_csv(path: Path) -> list[dict[str, str]]:
     """Read a UTF-8 CSV file and return its rows as dictionaries."""
+    # Preserve labels and IDs exactly as written for deterministic joins.
     with path.open(newline="", encoding="utf-8") as handle:
         return list(csv.DictReader(handle))
 
 def adjusted_rand(true_labels: list[str], predicted_labels: list[str]) -> float:
     """Calculate adjusted Rand agreement between two label assignments."""
+    # Count same-pair agreements within each truth/prediction cell and each partition.
     n = len(true_labels)
     if n < 2:
         return 1.0
@@ -29,6 +31,7 @@ def adjusted_rand(true_labels: list[str], predicted_labels: list[str]) -> float:
     sum_cells = sum(comb(count, 2) for count in table.values())
     sum_true = sum(comb(count, 2) for count in true_counts.values())
     sum_predicted = sum(comb(count, 2) for count in predicted_counts.values())
+    # Adjust observed pair agreement against the chance expectation for these marginals.
     total = comb(n, 2)
     expected = sum_true * sum_predicted / total
     maximum = (sum_true + sum_predicted) / 2
@@ -36,6 +39,7 @@ def adjusted_rand(true_labels: list[str], predicted_labels: list[str]) -> float:
 
 def evaluate(data_dir: Path, analysis_dir: Path, truth_path: Path | None = None) -> dict[str, object]:
     """Join predicted assignments with isolated labels and calculate clustering and ranking metrics."""
+    # Load the isolated answer key only in this evaluation path, never in clustering.
     total_incidents = len(read_csv(data_dir / "incidents.csv"))
     answer_key = truth_path or (data_dir / "true_causes.csv")
     truth = {row["incident_id"]: row["cause_id"] for row in read_csv(answer_key)}
@@ -48,6 +52,7 @@ def evaluate(data_dir: Path, analysis_dir: Path, truth_path: Path | None = None)
         if cause_id:
             rankings[proposal["cluster_id"]].append(cause_id)
 
+    # Align truth and predictions by incident ID; unassigned records count as noise.
     ids = list(truth)
     actual = [truth[incident_id] for incident_id in ids]
     predicted = [assignments.get(incident_id, "NOISE") for incident_id in ids]
@@ -57,6 +62,7 @@ def evaluate(data_dir: Path, analysis_dir: Path, truth_path: Path | None = None)
     non_noise = {cluster_id: members for cluster_id, members in cluster_members.items() if cluster_id != "NOISE"}
     purity_numerator = sum(Counter(members).most_common(1)[0][1] for members in non_noise.values())
     purity_denominator = sum(len(members) for members in non_noise.values())
+    # Score cause ranking only on pure clusters, where there is one unambiguous target cause.
     ranking_targets = [(cluster_id, Counter(members).most_common(1)[0][0]) for cluster_id, members in non_noise.items()
                        if len(Counter(members)) == 1]
     top1 = sum(bool(rankings.get(cluster_id) and rankings[cluster_id][0] == expected) for cluster_id, expected in ranking_targets)
@@ -88,6 +94,7 @@ def main() -> None:
     parser.add_argument("--analysis", type=Path, default=root / "data" / "analysis")
     parser.add_argument("--truth", type=Path, help="optional separate answer-key CSV for held-out evaluation")
     args = parser.parse_args()
+    # Print JSON so scripts and humans can consume the same metric report.
     result = evaluate(args.data, args.analysis, args.truth)
     print(json.dumps(result, indent=2))
 

@@ -79,6 +79,7 @@ CAUSE_PARENTS = {
 
 def support_timestamp(start: datetime, rng: random.Random, days: int = 30) -> datetime:
     """Sample a busier weekday daytime hour and a quieter weekend/night period."""
+    # Weight weekdays and business hours more heavily while retaining off-hours activity.
     offsets = list(range(days))
     day_weights = [3.5 if (start + timedelta(days=offset)).weekday() < 5 else 1.0 for offset in offsets]
     day = rng.choices(offsets, weights=day_weights, k=1)[0]
@@ -88,6 +89,7 @@ def support_timestamp(start: datetime, rng: random.Random, days: int = 30) -> da
 
 def add_text_noise(text: str, rng: random.Random) -> str:
     """Apply seeded abbreviation, typo, alert-prefix, and formatting noise to a ticket description."""
+    # Use independent probabilities so each synthetic ticket gets a variable mix of noise.
     if rng.random() < 0.035:
         text = text.replace("service", "svc", 1).replace("connection", "conn", 1)
     if rng.random() < 0.025:
@@ -106,6 +108,7 @@ def add_text_noise(text: str, rng: random.Random) -> str:
 
 def write_csv(path: Path, fields: list[str], rows: list[dict[str, object]]) -> None:
     """Write row dictionaries to a CSV file with a supplied, stable column order."""
+    # Keep a consistent schema even when the row order or generation seed changes.
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
@@ -114,6 +117,7 @@ def write_csv(path: Path, fields: list[str], rows: list[dict[str, object]]) -> N
 
 def generate(output: Path, incidents_per_cause: int = 180, noise_count: int = 450) -> dict[str, int]:
     """Create recurring-cause tickets, one-off requests, system inventory, dependency edges, and changes."""
+    # A fixed seed makes generated examples and benchmark results repeatable.
     rng = random.Random(SEED)
     start = datetime(2026, 9, 16, tzinfo=timezone.utc)
     system_id = {name: ci for ci, name, _, _ in SYSTEMS}
@@ -122,6 +126,7 @@ def generate(output: Path, incidents_per_cause: int = 180, noise_count: int = 45
     def new_incident_id() -> str:
         # Random IDs avoid encoding cause, generation order, or noise membership.
         """Create a seeded, unique-looking incident identifier."""
+        # Retry on collision so each generated row can be joined by a unique ID.
         while True:
             value = f"INC-{rng.randrange(1_000_000_000):09d}"
             if value not in used_incident_ids:
@@ -134,6 +139,7 @@ def generate(output: Path, incidents_per_cause: int = 180, noise_count: int = 45
     cause_windows: dict[str, datetime] = {}
 
     # Event windows are intentionally staggered. A subset has no related change record.
+    # Each cause block generates both incidents and its associated change evidence.
     for number, (cause_id, summary, affected_name, phrases) in enumerate(CAUSES):
         incident_day = 26 if cause_id in {"edge-cert", "portal-cache"} else number * 2
         while (start + timedelta(days=incident_day)).weekday() >= 5:
@@ -174,6 +180,7 @@ def generate(output: Path, incidents_per_cause: int = 180, noise_count: int = 45
             truth_rows.append({"incident_id": incident_id, "cause_id": cause_id})
 
     # One-off requests have no recurring cause and should usually remain noise.
+    # These unrelated requests provide negative examples for clustering.
     actions = ["reset", "update", "add", "remove", "restore", "replace", "renew", "move", "install", "review", "rename", "archive"]
     resources = ["password", "calendar permission", "shared folder", "browser profile", "meeting room", "laptop dock",
                  "software license", "mailing list", "project workspace", "printer mapping", "mobile device", "team dashboard"]
@@ -200,6 +207,7 @@ def generate(output: Path, incidents_per_cause: int = 180, noise_count: int = 45
                               "resolved_at": (opened + timedelta(minutes=rng.randint(15, 600))).isoformat()})
 
     # Stable ordering makes regenerated CSVs byte-for-byte repeatable.
+    # Write feature tables and the evaluation-only labels as separate files.
     incident_rows.sort(key=lambda row: str(row["opened_at"]))
     write_csv(output / "incidents.csv", list(incident_rows[0]), incident_rows)
     write_csv(output / "true_causes.csv", ["incident_id", "cause_id"], truth_rows)
@@ -223,6 +231,7 @@ def main() -> None:
     parser.add_argument("--incidents-per-cause", type=int)
     parser.add_argument("--noise-count", type=int)
     args = parser.parse_args()
+    # Explicit counts override profile defaults, allowing reproducible custom datasets.
     per_cause = args.incidents_per_cause if args.incidents_per_cause is not None else (1000 if args.profile == "benchmark" else 180)
     noise_count = args.noise_count if args.noise_count is not None else (15000 if args.profile == "benchmark" else 450)
     if per_cause < 1 or noise_count < 0:

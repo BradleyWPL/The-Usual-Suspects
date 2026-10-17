@@ -20,12 +20,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def rows(path: Path) -> list[dict[str, str]]:
     """Read a UTF-8 CSV file into row dictionaries."""
+    # Convert each source row into named values for psycopg's parameter binding.
     with path.open(newline="", encoding="utf-8") as handle:
         return list(csv.DictReader(handle))
 
 
 def load(database_url: str, data_dir: Path, analysis_dir: Path, schema_path: Path) -> dict[str, int]:
     """Apply the schema and transactionally load synthetic features and analysis outputs."""
+    # One connection context makes schema, data replacement, and inserts transactional.
     with psycopg.connect(database_url) as connection:
         connection.execute(schema_path.read_text(encoding="utf-8"))
         # The generator can evolve between commits. Replace the current demo
@@ -43,19 +45,23 @@ def load(database_url: str, data_dir: Path, analysis_dir: Path, schema_path: Pat
         run_id = str(manifest.get("run_id", "baseline-import"))
         method = str(manifest.get("method", "sparse_tfidf_connected_components"))
 
+        # Insert inventory and graph edges first because later records reference these IDs.
         connection.executemany(
             "INSERT INTO configuration_items(ci_id,name,ci_type,service,environment) VALUES (%(ci_id)s,%(name)s,%(ci_type)s,%(service)s,%(environment)s) ON CONFLICT(ci_id) DO UPDATE SET name=excluded.name,ci_type=excluded.ci_type,service=excluded.service,environment=excluded.environment",
             systems,
         )
         connection.executemany("INSERT INTO ci_dependencies(parent_ci_id,child_ci_id) VALUES (%(parent_ci_id)s,%(child_ci_id)s) ON CONFLICT DO NOTHING", edges)
+        # Load incident and change facts before their cluster/proposal references.
         connection.executemany(
             "INSERT INTO incidents(incident_id,opened_at,short_description,description,ci_id,requester_id,category,priority,assignment_group,state,resolved_at) VALUES (%(incident_id)s,%(opened_at)s,%(short_description)s,%(description)s,%(ci_id)s,%(requester_id)s,%(category)s,%(priority)s,%(assignment_group)s,%(state)s,%(resolved_at)s) ON CONFLICT(incident_id) DO UPDATE SET opened_at=excluded.opened_at,short_description=excluded.short_description,description=excluded.description,ci_id=excluded.ci_id,requester_id=excluded.requester_id,category=excluded.category,priority=excluded.priority,assignment_group=excluded.assignment_group,state=excluded.state,resolved_at=excluded.resolved_at",
             incidents,
         )
+        # Attach the model run identity to each cluster assignment for experiment history.
         connection.executemany(
             "INSERT INTO changes(change_id,ci_id,applied_at,summary,risk,outcome) VALUES (%(change_id)s,%(ci_id)s,%(applied_at)s,%(summary)s,%(risk)s,%(outcome)s) ON CONFLICT(change_id) DO UPDATE SET ci_id=excluded.ci_id,applied_at=excluded.applied_at,summary=excluded.summary,risk=excluded.risk,outcome=excluded.outcome",
             changes,
         )
+        # Serialize evidence lists as JSON for the PostgreSQL JSONB column.
         connection.executemany(
             "INSERT INTO clusters(cluster_id,run_id,incident_id,label,method) VALUES (%(cluster_id)s,%(run_id)s,%(incident_id)s,%(label)s,%(method)s) ON CONFLICT(cluster_id,run_id,incident_id) DO UPDATE SET label=excluded.label,method=excluded.method",
             [{**row, "run_id": run_id, "method": method} for row in assignments],
@@ -79,6 +85,7 @@ def main() -> None:
     parser.add_argument("--schema", type=Path, default=ROOT / "data" / "schema.sql")
     parser.add_argument("--database-url", default=os.getenv("DATABASE_URL"))
     args = parser.parse_args()
+    # Fail early with an actionable CLI message when no database connection is configured.
     if not args.database_url:
         parser.error("set DATABASE_URL or provide --database-url")
     print(json.dumps(load(args.database_url, args.data, args.analysis, args.schema), indent=2))
